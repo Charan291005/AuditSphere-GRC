@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Database files (Never commit real or simulated local databases)
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
+# Uploaded evidence and storage files (Never commit uploaded audit evidence)
+storage/*
+!storage/.gitkeep
+
+# Streamlit local state and secrets
+.streamlit/secrets.toml
+
+# Testing & linting caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
