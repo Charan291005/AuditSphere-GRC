@@ -259,6 +259,73 @@ def render_overview_page():
 
     st.markdown("<hr/>", unsafe_allow_html=True)
 
+    # PHASE 3: AUDIT EVIDENCE, TESTING & FINDINGS ASSURANCE
+    ev_metrics = summary.get("evidence_metrics")
+    fnd_metrics = summary.get("findings_metrics")
+    tst_metrics = summary.get("test_metrics")
+
+    if active and (ev_metrics or fnd_metrics or tst_metrics):
+        st.markdown(
+            '<div class="grc-card-title">Audit Evidence, Control Testing & Formal Findings</div>',
+            unsafe_allow_html=True,
+        )
+
+        p3_col1, p3_col2, p3_col3, p3_col4, p3_col5 = st.columns(5)
+        with p3_col1:
+            tot_ev = ev_metrics["total_evidence"] if ev_metrics else 0
+            acc_ev = ev_metrics["review_counts"].get("Accepted", 0) if ev_metrics else 0
+            render_kpi_card(
+                label="Evidence Records",
+                value=f"{tot_ev}",
+                description=f"{acc_ev} accepted by auditor",
+            )
+        with p3_col2:
+            integ_errs = ev_metrics["integrity_issues"] if ev_metrics else 0
+            render_kpi_card(
+                label="Integrity Alerts",
+                value=f"{integ_errs}",
+                description="SHA-256 mismatch or missing" if integ_errs > 0 else "All local files intact",
+            )
+        with p3_col3:
+            tot_tests = tst_metrics["total_tests"] if tst_metrics else 0
+            pass_tests = tst_metrics["pass_count"] if tst_metrics else 0
+            fail_tests = tst_metrics["fail_count"] if tst_metrics else 0
+            render_kpi_card(
+                label="Control Tests",
+                value=f"{tot_tests}",
+                description=f"{pass_tests} Pass &bull; {fail_tests} Fail",
+            )
+        with p3_col4:
+            tot_fnd = fnd_metrics["total_findings"] if fnd_metrics else 0
+            open_fnd = fnd_metrics["open_findings"] if fnd_metrics else 0
+            render_kpi_card(
+                label="Formal Findings",
+                value=f"{tot_fnd}",
+                description=f"{open_fnd} open / actionable",
+            )
+        with p3_col5:
+            crit_high = (
+                (fnd_metrics["severity_counts"].get("Critical", 0) + fnd_metrics["severity_counts"].get("High", 0))
+                if fnd_metrics
+                else 0
+            )
+            render_kpi_card(
+                label="Critical & High",
+                value=f"{crit_high}",
+                description="Elevated risk non-conformities",
+            )
+
+        st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+        ef1, ef2 = st.columns([1, 1])
+
+        with ef1:
+            _render_findings_severity_chart(fnd_metrics["severity_counts"] if fnd_metrics else {})
+
+        with ef2:
+            _render_evidence_status_chart(ev_metrics["review_counts"] if ev_metrics else {})
+
+        st.markdown("<hr/>", unsafe_allow_html=True)
+
     # Activity Stream Row
     st.markdown(
         '<div class="grc-card-title">Recent Assessment Activity</div>',
@@ -299,7 +366,7 @@ def render_overview_page():
     st.markdown(
         """
         <div style="margin-top: 1.5rem; padding: 0.85rem 1rem; background-color: #FFFFFF; border: 1px dashed #D1D5DB; border-radius: 4px; font-size: 0.825rem; color: #6B7280;">
-            <strong>Phase 3 Scope Notice:</strong> Formal audit evidence files, quantitative risk registers, and remediation CAP tracking workflows will be activated in Phase 3. In compliance with strict GRC integrity standards, no artificial or mock percentages are displayed.
+            <strong>Phase 4 Scope Notice:</strong> Quantitative risk registers, threat modelling, and remediation CAP tracking workflows will be activated in Phase 4. All Phase 1, 2, and 3 workflows (Assessment Management, Control Assessment, Evidence Repository, Control Testing, and Gap Analysis/Findings) are fully operational. In compliance with strict GRC integrity standards, no artificial or mock percentages are displayed.
         </div>
         """,
         unsafe_allow_html=True,
@@ -427,4 +494,84 @@ def _render_category_readiness_bar(cat_summary: Dict[str, Dict[str, Any]]):
         plot_bgcolor="#FFFFFF",
     )
 
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_findings_severity_chart(severity_counts: Dict[str, int]):
+    """Render horizontal bar chart for findings by severity."""
+    st.markdown("**Findings by Severity**")
+    severities = ["Critical", "High", "Medium", "Low", "Informational"]
+    colors = {
+        "Critical": "#DC2626",
+        "High": "#EA580C",
+        "Medium": "#D97706",
+        "Low": "#2563EB",
+        "Informational": "#6B7280",
+    }
+    vals = [severity_counts.get(s, 0) for s in severities]
+
+    if sum(vals) == 0:
+        st.info("No formal findings recorded for this assessment.")
+        return
+
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=vals,
+                y=severities,
+                orientation="h",
+                marker=dict(color=[colors[s] for s in severities]),
+                text=[str(v) if v > 0 else "" for v in vals],
+                textposition="auto",
+            )
+        ]
+    )
+    fig.update_layout(
+        margin=dict(t=10, b=10, l=10, r=10),
+        height=240,
+        xaxis=dict(title="Findings Count", dtick=1),
+        yaxis=dict(autorange="reversed"),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_evidence_status_chart(review_counts: Dict[str, int]):
+    """Render donut chart for evidence review status distribution."""
+    st.markdown("**Evidence Review Status**")
+    statuses = ["Accepted", "Pending Review", "Needs Clarification", "Rejected"]
+    colors = {
+        "Accepted": "#15803D",
+        "Pending Review": "#D97706",
+        "Needs Clarification": "#2563EB",
+        "Rejected": "#DC2626",
+    }
+    vals = [review_counts.get(s, 0) for s in statuses]
+
+    if sum(vals) == 0:
+        st.info("No audit evidence files uploaded for this assessment.")
+        return
+
+    fig = go.Figure(
+        data=[
+            go.Pie(
+                labels=statuses,
+                values=vals,
+                hole=0.48,
+                marker=dict(colors=[colors[s] for s in statuses], line=dict(color="#FFFFFF", width=1.5)),
+                textinfo="value+percent",
+                hoverinfo="label+value+percent",
+                sort=False,
+            )
+        ]
+    )
+    fig.update_layout(
+        margin=dict(t=10, b=10, l=10, r=10),
+        height=240,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=10)),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+    )
     st.plotly_chart(fig, use_container_width=True)

@@ -9,6 +9,7 @@ Features:
 - Idempotent schema initialization and repeat-safe migrations that preserve existing records
 - Automated synchronization of the ISO/IEC 27001:2022 20-control catalogue
 - Automatic initialization of Not Assessed control assessment rows for all assessments
+- Phase 3 Evidence Management, Control Testing, and Audit Findings schema support
 """
 
 import json
@@ -23,6 +24,8 @@ from typing import Generator, Optional, List, Dict, Any
 DEFAULT_DB_DIR = Path(__file__).resolve().parent / "data"
 DEFAULT_DB_PATH = DEFAULT_DB_DIR / "auditsphere.db"
 CONTROLS_JSON_PATH = DEFAULT_DB_DIR / "controls.json"
+STORAGE_DIR = Path(__file__).resolve().parent / "storage"
+EVIDENCE_STORAGE_DIR = STORAGE_DIR / "evidence"
 
 
 def get_utc_now_iso() -> str:
@@ -129,12 +132,30 @@ CREATE TABLE IF NOT EXISTS evidence (
     evidence_identifier TEXT NOT NULL, -- e.g. 'EVD-001'
     title TEXT NOT NULL,
     description TEXT,
+    evidence_type TEXT NOT NULL DEFAULT 'Other',
     file_name TEXT NOT NULL,
+    original_file_name TEXT,
+    storage_identifier TEXT,
     file_path TEXT NOT NULL,
     file_size INTEGER NOT NULL DEFAULT 0,
     file_hash TEXT, -- SHA-256 integrity hash
+    sha256_hash TEXT,
+    source_department TEXT,
+    collection_date TEXT,
+    period_covered TEXT,
+    review_status TEXT NOT NULL DEFAULT 'Pending Review' CHECK(review_status IN ('Pending Review', 'Accepted', 'Needs Clarification', 'Rejected')),
+    reviewer_name TEXT,
+    reviewer_notes TEXT,
+    reviewed_at TEXT,
+    relevance_rating TEXT DEFAULT 'Relevant',
+    sufficiency_rating TEXT DEFAULT 'Sufficient',
+    reliability_rating TEXT DEFAULT 'Reliable',
+    integrity_status TEXT NOT NULL DEFAULT 'Not yet verified' CHECK(integrity_status IN ('Not yet verified', 'Verified', 'Hash mismatch', 'File missing')),
+    integrity_verified_at TEXT,
+    is_archived INTEGER NOT NULL DEFAULT 0,
     uploaded_by TEXT NOT NULL,
     uploaded_at TEXT NOT NULL,
+    updated_at TEXT,
     UNIQUE(assessment_id, evidence_identifier)
 );
 
@@ -149,28 +170,58 @@ CREATE TABLE IF NOT EXISTS control_evidence (
     UNIQUE(control_assessment_id, evidence_id)
 );
 
--- 6. Audit Findings (Gaps, Non-conformities, Observations)
+-- 6. Control Testing Records (Phase 3)
+CREATE TABLE IF NOT EXISTS control_tests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    control_assessment_id INTEGER NOT NULL REFERENCES control_assessments(id) ON DELETE CASCADE,
+    test_reference TEXT NOT NULL, -- e.g. 'TST-001'
+    test_type TEXT NOT NULL CHECK(test_type IN ('Design effectiveness', 'Operating effectiveness', 'Walkthrough', 'Document review', 'Configuration review')),
+    testing_objective TEXT NOT NULL,
+    testing_procedure TEXT NOT NULL,
+    sample_examined TEXT,
+    assessment_period TEXT,
+    expected_result TEXT NOT NULL,
+    observed_result TEXT NOT NULL,
+    supporting_evidence_references TEXT,
+    evidence_limitations TEXT,
+    assessor_name TEXT NOT NULL,
+    testing_date TEXT NOT NULL, -- YYYY-MM-DD
+    conclusion TEXT NOT NULL CHECK(conclusion IN ('Pass', 'Fail', 'Inconclusive', 'Not tested')),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(assessment_id, test_reference)
+);
+
+-- 7. Audit Findings (Gaps, Non-conformities, Observations)
 CREATE TABLE IF NOT EXISTS findings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
     control_assessment_id INTEGER REFERENCES control_assessments(id) ON DELETE SET NULL,
     finding_identifier TEXT NOT NULL, -- e.g. 'FND-001'
     title TEXT NOT NULL,
-    finding_type TEXT NOT NULL CHECK(finding_type IN ('Major Non-Conformity', 'Minor Non-Conformity', 'Opportunity for Improvement', 'Observation')),
+    finding_type TEXT NOT NULL DEFAULT 'Major Non-Conformity' CHECK(finding_type IN ('Major Non-Conformity', 'Minor Non-Conformity', 'Opportunity for Improvement', 'Observation')),
     severity TEXT NOT NULL CHECK(severity IN ('Critical', 'High', 'Medium', 'Low', 'Informational')),
-    description TEXT NOT NULL,
+    description TEXT,
     criteria TEXT,
     condition TEXT,
     cause TEXT,
     effect TEXT,
     recommendation TEXT,
-    status TEXT NOT NULL CHECK(status IN ('Open', 'Under Review', 'Remediation In Progress', 'Remediated', 'Accepted Risk', 'Closed')) DEFAULT 'Open',
+    supporting_evidence_references TEXT,
+    evidence_limitations TEXT,
+    supporting_test_references TEXT,
+    responsible_department TEXT,
+    assessor_name TEXT NOT NULL DEFAULT 'Lead Assessor',
+    status TEXT NOT NULL CHECK(status IN ('Draft', 'Open', 'Under Review', 'Closed', 'Remediation In Progress', 'Remediated', 'Accepted Risk')) DEFAULT 'Draft',
+    verification_notes TEXT,
     identified_at TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT '2026-01-01T00:00:00Z',
     updated_at TEXT NOT NULL,
     UNIQUE(assessment_id, finding_identifier)
 );
 
--- 7. Risk Register
+-- 8. Risk Register
 CREATE TABLE IF NOT EXISTS risks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
@@ -195,7 +246,7 @@ CREATE TABLE IF NOT EXISTS risks (
     UNIQUE(assessment_id, risk_identifier)
 );
 
--- 8. Remediation Tracker
+-- 9. Remediation Tracker
 CREATE TABLE IF NOT EXISTS remediation (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
@@ -214,7 +265,7 @@ CREATE TABLE IF NOT EXISTS remediation (
     UNIQUE(assessment_id, remediation_identifier)
 );
 
--- 9. Activity Log (Assessment lifecycle history)
+-- 10. Activity Log (Assessment lifecycle history)
 CREATE TABLE IF NOT EXISTS activity_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     assessment_id INTEGER REFERENCES assessments(id) ON DELETE CASCADE,
@@ -233,8 +284,14 @@ CREATE INDEX IF NOT EXISTS idx_control_assessments_aid ON control_assessments(as
 CREATE INDEX IF NOT EXISTS idx_control_assessments_cid ON control_assessments(control_id);
 CREATE INDEX IF NOT EXISTS idx_control_assessments_status ON control_assessments(status);
 CREATE INDEX IF NOT EXISTS idx_evidence_aid ON evidence(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_review_status ON evidence(review_status);
 CREATE INDEX IF NOT EXISTS idx_control_evidence_caid ON control_evidence(control_assessment_id);
+CREATE INDEX IF NOT EXISTS idx_control_evidence_eid ON control_evidence(evidence_id);
+CREATE INDEX IF NOT EXISTS idx_control_tests_aid ON control_tests(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_control_tests_caid ON control_tests(control_assessment_id);
 CREATE INDEX IF NOT EXISTS idx_findings_aid ON findings(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_findings_caid ON findings(control_assessment_id);
+CREATE INDEX IF NOT EXISTS idx_findings_status ON findings(status);
 CREATE INDEX IF NOT EXISTS idx_risks_aid ON risks(assessment_id);
 CREATE INDEX IF NOT EXISTS idx_remediation_aid ON remediation(assessment_id);
 CREATE INDEX IF NOT EXISTS idx_activity_aid ON activity_log(assessment_id);
@@ -263,6 +320,25 @@ BEGIN
         THEN RAISE(ABORT, 'Cross-assessment violation: control_assessment does not belong to specified assessment')
         WHEN (SELECT assessment_id FROM evidence WHERE id = NEW.evidence_id) != NEW.assessment_id
         THEN RAISE(ABORT, 'Cross-assessment violation: evidence does not belong to specified assessment')
+    END;
+END;
+
+-- Prevent linking control tests to a control assessment from a different assessment
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_control_test_insert
+BEFORE INSERT ON control_tests
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM control_assessments WHERE id = NEW.control_assessment_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: control_assessment does not belong to test assessment')
+    END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_control_test_update
+BEFORE UPDATE ON control_tests
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM control_assessments WHERE id = NEW.control_assessment_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: control_assessment does not belong to test assessment')
     END;
 END;
 
@@ -336,7 +412,7 @@ END;
 def run_migrations(conn: sqlite3.Connection) -> None:
     """
     Safely execute repeat-safe schema migrations for existing databases
-    created during Phase 1 to ensure all Phase 2 columns exist.
+    to ensure all Phase 2 and Phase 3 columns and tables exist.
     """
     cursor = conn.cursor()
 
@@ -370,7 +446,54 @@ def run_migrations(conn: sqlite3.Connection) -> None:
         if col_name not in ca_cols:
             cursor.execute(f"ALTER TABLE control_assessments ADD COLUMN {col_name} {col_type};")
 
-    # 3. Migrate 'activity_log' table
+    # 3. Migrate 'evidence' table
+    cursor.execute("PRAGMA table_info(evidence);")
+    ev_cols = {row["name"] for row in cursor.fetchall()}
+    columns_to_add_ev = {
+        "evidence_type": "TEXT NOT NULL DEFAULT 'Other'",
+        "original_file_name": "TEXT",
+        "storage_identifier": "TEXT",
+        "sha256_hash": "TEXT",
+        "source_department": "TEXT",
+        "collection_date": "TEXT",
+        "period_covered": "TEXT",
+        "review_status": "TEXT NOT NULL DEFAULT 'Pending Review'",
+        "reviewer_name": "TEXT",
+        "reviewer_notes": "TEXT",
+        "reviewed_at": "TEXT",
+        "relevance_rating": "TEXT DEFAULT 'Relevant'",
+        "sufficiency_rating": "TEXT DEFAULT 'Sufficient'",
+        "reliability_rating": "TEXT DEFAULT 'Reliable'",
+        "integrity_status": "TEXT NOT NULL DEFAULT 'Not yet verified'",
+        "integrity_verified_at": "TEXT",
+        "is_archived": "INTEGER NOT NULL DEFAULT 0",
+        "updated_at": "TEXT",
+    }
+    for col_name, col_type in columns_to_add_ev.items():
+        if col_name not in ev_cols:
+            cursor.execute(f"ALTER TABLE evidence ADD COLUMN {col_name} {col_type};")
+
+    # Backfill sha256_hash from file_hash or original_file_name from file_name if missing
+    cursor.execute("UPDATE evidence SET sha256_hash = file_hash WHERE sha256_hash IS NULL AND file_hash IS NOT NULL;")
+    cursor.execute("UPDATE evidence SET original_file_name = file_name WHERE original_file_name IS NULL AND file_name IS NOT NULL;")
+
+    # 4. Migrate 'findings' table
+    cursor.execute("PRAGMA table_info(findings);")
+    fnd_cols = {row["name"] for row in cursor.fetchall()}
+    columns_to_add_fnd = {
+        "supporting_evidence_references": "TEXT",
+        "evidence_limitations": "TEXT",
+        "supporting_test_references": "TEXT",
+        "responsible_department": "TEXT",
+        "assessor_name": "TEXT NOT NULL DEFAULT 'Lead Assessor'",
+        "verification_notes": "TEXT",
+        "created_at": "TEXT NOT NULL DEFAULT '2026-01-01T00:00:00Z'",
+    }
+    for col_name, col_type in columns_to_add_fnd.items():
+        if col_name not in fnd_cols:
+            cursor.execute(f"ALTER TABLE findings ADD COLUMN {col_name} {col_type};")
+
+    # 5. Migrate 'activity_log' table
     cursor.execute("PRAGMA table_info(activity_log);")
     act_cols = {row["name"] for row in cursor.fetchall()}
     columns_to_add_act = {
@@ -411,12 +534,10 @@ def sync_controls_catalogue(conn: sqlite3.Connection, catalogue_path: Optional[P
         gaps_json = json.dumps(ctrl.get("example_gaps", []))
         recs_json = json.dumps(ctrl.get("example_recommendations", []))
 
-        # Check if already exists
         cursor.execute("SELECT id FROM controls WHERE control_identifier = ?", (ident,))
         row = cursor.fetchone()
 
         if row:
-            # Update existing control metadata
             cursor.execute(
                 """
                 UPDATE controls
@@ -439,7 +560,6 @@ def sync_controls_catalogue(conn: sqlite3.Connection, catalogue_path: Optional[P
                 ),
             )
         else:
-            # Insert new control
             cursor.execute(
                 """
                 INSERT INTO controls (
@@ -479,7 +599,6 @@ def initialize_assessment_controls(conn: sqlite3.Connection, assessment_id: int)
 
     for c in all_controls:
         cid = c["id"]
-        # Check if already present for this assessment
         cursor.execute(
             "SELECT id FROM control_assessments WHERE assessment_id = ? AND control_id = ?",
             (assessment_id, cid),
@@ -522,3 +641,6 @@ def init_db(db_path: Optional[str | Path] = None) -> None:
         run_migrations(conn)
         sync_controls_catalogue(conn)
         initialize_missing_controls_for_all_assessments(conn)
+
+    # Ensure storage directory exists
+    EVIDENCE_STORAGE_DIR.mkdir(parents=True, exist_ok=True)

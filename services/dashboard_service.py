@@ -51,6 +51,9 @@ def get_dashboard_summary(
     # Resolve active assessment if specified
     active_assessment = None
     control_metrics = None
+    evidence_metrics = None
+    findings_metrics = None
+    test_metrics = None
 
     if active_assessment_id is not None:
         active_assessment = get_assessment(active_assessment_id, db_path=db_path)
@@ -59,6 +62,92 @@ def get_dashboard_summary(
 
             controls = get_assessment_controls(active_assessment_id, db_path=db_path)
             control_metrics = calculate_overall_metrics(controls)
+
+            with db_session(db_path) as conn:
+                cursor = conn.cursor()
+
+                # Evidence metrics
+                cursor.execute(
+                    """
+                    SELECT review_status, COUNT(*) as cnt
+                    FROM evidence
+                    WHERE assessment_id = ?
+                    GROUP BY review_status
+                    """,
+                    (active_assessment_id,),
+                )
+                rev_rows = cursor.fetchall()
+                rev_counts = {r["review_status"]: r["cnt"] for r in rev_rows}
+                total_ev = sum(rev_counts.values())
+
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) FROM evidence
+                    WHERE assessment_id = ? AND integrity_status IN ('Hash mismatch', 'File missing')
+                    """,
+                    (active_assessment_id,),
+                )
+                integrity_issues = cursor.fetchone()[0]
+
+                evidence_metrics = {
+                    "total_evidence": total_ev,
+                    "review_counts": rev_counts,
+                    "integrity_issues": integrity_issues,
+                }
+
+                # Findings metrics
+                cursor.execute(
+                    """
+                    SELECT severity, status, COUNT(*) as cnt
+                    FROM findings
+                    WHERE assessment_id = ?
+                    GROUP BY severity, status
+                    """,
+                    (active_assessment_id,),
+                )
+                fnd_rows = cursor.fetchall()
+                sev_counts = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0, "Informational": 0}
+                total_fnd = 0
+                open_fnd = 0
+                closed_fnd = 0
+
+                for r in fnd_rows:
+                    sev = r["severity"]
+                    st_val = r["status"]
+                    cnt = r["cnt"]
+                    total_fnd += cnt
+                    if sev in sev_counts:
+                        sev_counts[sev] += cnt
+                    if st_val == "Closed":
+                        closed_fnd += cnt
+                    else:
+                        open_fnd += cnt
+
+                findings_metrics = {
+                    "total_findings": total_fnd,
+                    "open_findings": open_fnd,
+                    "closed_findings": closed_fnd,
+                    "severity_counts": sev_counts,
+                }
+
+                # Control test metrics
+                cursor.execute(
+                    """
+                    SELECT conclusion, COUNT(*) as cnt
+                    FROM control_tests
+                    WHERE assessment_id = ?
+                    GROUP BY conclusion
+                    """,
+                    (active_assessment_id,),
+                )
+                test_rows = cursor.fetchall()
+                t_counts = {r["conclusion"]: r["cnt"] for r in test_rows}
+                test_metrics = {
+                    "total_tests": sum(t_counts.values()),
+                    "pass_count": t_counts.get("Pass", 0),
+                    "fail_count": t_counts.get("Fail", 0),
+                    "inconclusive_count": t_counts.get("Inconclusive", 0),
+                }
 
     # Recent activity stream
     recent_activities = get_recent_activities(
@@ -72,5 +161,8 @@ def get_dashboard_summary(
         "status_distribution": status_counts,
         "active_assessment": active_assessment,
         "control_metrics": control_metrics,
+        "evidence_metrics": evidence_metrics,
+        "findings_metrics": findings_metrics,
+        "test_metrics": test_metrics,
         "recent_activities": recent_activities,
     }

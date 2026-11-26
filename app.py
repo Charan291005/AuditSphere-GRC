@@ -17,6 +17,8 @@ from ui_components import inject_custom_styles
 from pages.overview_page import render_overview_page
 from pages.assessments_page import render_assessments_page
 from pages.control_assessment_page import render_control_assessment_page
+from pages.evidence_page import render_evidence_page
+from pages.gap_analysis_page import render_gap_analysis_page
 from pages.placeholder_page import render_placeholder_page
 
 # Set top-level page configuration
@@ -150,12 +152,12 @@ with st.sidebar:
         "1. Overview Dashboard",
         "2. Assessment Management",
         "3. ISO 27001 Controls",
-        "4. Evidence Management (Phase 3)",
-        "5. Gap Analysis (Phase 3)",
-        "6. Risk Register (Phase 3)",
-        "7. Remediation Tracker (Phase 3)",
-        "8. Assessment Reports (Phase 3)",
-        "9. Settings (Phase 3)",
+        "4. Evidence Management",
+        "5. Gap Analysis",
+        "6. Risk Register (Phase 4)",
+        "7. Remediation Tracker (Phase 4)",
+        "8. Assessment Reports (Phase 4)",
+        "9. Settings (Phase 4)",
     ]
 
     # Map current selection
@@ -184,7 +186,7 @@ with st.sidebar:
     st.markdown(
         """
         <div style="font-size: 0.72rem; color: #9CA3AF; line-height: 1.4;">
-            <strong>AuditSphere v0.2.0 (Phase 2)</strong><br/>
+            <strong>AuditSphere v0.3.0 (Phase 3)</strong><br/>
             Engine: SQLite 3 (WAL / FKs ON)<br/>
             Framework: ISO/IEC 27001:2022<br/>
             Simulated GRC Portfolio Tool
@@ -204,9 +206,9 @@ elif page == "Assessment Management":
 elif page == "ISO 27001 Control Assessment":
     render_control_assessment_page()
 elif page == "Evidence Management":
-    render_placeholder_page("evidence")
+    render_evidence_page()
 elif page == "Gap Analysis":
-    render_placeholder_page("gap_analysis")
+    render_gap_analysis_page()
 elif page == "Risk Register":
     render_placeholder_page("risk_register")
 elif page == "Remediation Tracker":

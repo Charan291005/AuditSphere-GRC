@@ -229,16 +229,70 @@ def inject_custom_styles():
 
 
 def render_status_badge(status: str) -> str:
-    """Return HTML for a status badge."""
+    """Return HTML for an assessment or control status badge."""
     css_class = {
         "Draft": "badge-draft",
         "In Progress": "badge-in-progress",
         "In Review": "badge-in-review",
         "Completed": "badge-completed",
         "Archived": "badge-archived",
+        "Implemented": "badge-completed",
+        "Partially Implemented": "badge-in-review",
+        "Not Implemented": "event-archived",
+        "Not Assessed": "badge-draft",
+        "Not Applicable": "badge-archived",
     }.get(status, "badge-draft")
 
     return f'<span class="badge {css_class}">{status}</span>'
+
+
+def render_review_badge(status: str) -> str:
+    """Return HTML for an evidence review status badge."""
+    colors = {
+        "Accepted": ("#15803D", "#F0FDF4", "#BBF7D0"),
+        "Pending Review": ("#B45309", "#FFFBEB", "#FDE68A"),
+        "Needs Clarification": ("#1E40AF", "#EFF6FF", "#BFDBFE"),
+        "Rejected": ("#B91C1C", "#FEF2F2", "#FECACA"),
+    }.get(status, ("#4B5563", "#F3F4F6", "#D1D5DB"))
+
+    return f'<span style="background-color: {colors[1]}; color: {colors[0]}; border: 1px solid {colors[2]}; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 600;">{status}</span>'
+
+
+def render_integrity_badge(status: str) -> str:
+    """Return HTML for an evidence SHA-256 integrity status badge."""
+    colors = {
+        "Verified": ("#15803D", "#F0FDF4", "#BBF7D0"),
+        "Hash mismatch": ("#B91C1C", "#FEF2F2", "#FECACA"),
+        "File missing": ("#991B1B", "#FEF2F2", "#FECACA"),
+        "Not yet verified": ("#6B7280", "#F3F4F6", "#D1D5DB"),
+    }.get(status, ("#6B7280", "#F3F4F6", "#D1D5DB"))
+
+    return f'<span style="background-color: {colors[1]}; color: {colors[0]}; border: 1px solid {colors[2]}; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 600;">{status}</span>'
+
+
+def render_severity_badge(severity: str) -> str:
+    """Return HTML for an audit finding severity badge."""
+    colors = {
+        "Critical": ("#991B1B", "#FEF2F2", "#FECACA"),
+        "High": ("#C2410C", "#FFF7ED", "#FED7AA"),
+        "Medium": ("#B45309", "#FFFBEB", "#FDE68A"),
+        "Low": ("#1D4ED8", "#EFF6FF", "#BFDBFE"),
+        "Informational": ("#4B5563", "#F3F4F6", "#D1D5DB"),
+    }.get(severity, ("#4B5563", "#F3F4F6", "#D1D5DB"))
+
+    return f'<span style="background-color: {colors[1]}; color: {colors[0]}; border: 1px solid {colors[2]}; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase;">{severity}</span>'
+
+
+def render_conclusion_badge(conclusion: str) -> str:
+    """Return HTML for a control test conclusion badge."""
+    colors = {
+        "Pass": ("#15803D", "#F0FDF4", "#BBF7D0"),
+        "Fail": ("#B91C1C", "#FEF2F2", "#FECACA"),
+        "Inconclusive": ("#B45309", "#FFFBEB", "#FDE68A"),
+        "Not tested": ("#4B5563", "#F3F4F6", "#D1D5DB"),
+    }.get(conclusion, ("#4B5563", "#F3F4F6", "#D1D5DB"))
+
+    return f'<span style="background-color: {colors[1]}; color: {colors[0]}; border: 1px solid {colors[2]}; padding: 0.15rem 0.5rem; border-radius: 3px; font-size: 0.75rem; font-weight: 700;">{conclusion}</span>'
 
 
 def render_event_badge(event_type: str) -> str:

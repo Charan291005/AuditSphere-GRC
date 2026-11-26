@@ -27,7 +27,7 @@ AuditSphere solves this by providing a unified assessment workspace with structu
 - **Database Engine:** SQLite (WAL Mode, Parameterized Queries, Foreign Keys Enforced)
 - **Data & Visualizations:** Pandas, Plotly
 - **Document Generation:** ReportLab
-- **Testing:** Pytest (30 automated tests)
+- **Testing:** Pytest (43 automated tests)
 - **VCS:** Git
 
 No external LLM APIs, paid services, microservices, or complex container dependencies are required.
@@ -72,9 +72,28 @@ No external LLM APIs, paid services, microservices, or complex container depende
   - Plotly donut chart of control implementation status distribution.
   - Plotly stacked bar chart of assessment progress by control theme.
   - Plotly grouped bar chart of domain weighted readiness scores.
-- **Fictional Demonstration Dataset (FinCore Technologies):**
-  - Repeat-safe demo generator seeding 20 controls: 7 Implemented, 3 Partially Implemented, 2 Not Implemented, 8 Not Assessed, 0 Not Applicable.
-  - Produces exact verified metrics: 60.0% Coverage, 70.83% Weighted Readiness, 5 Potential Gaps, 8 Pending.
+### Phase 3: Evidence Management, Control Testing & Gap Analysis
+- **Audit Evidence Repository (`pages/evidence_page.py`, `services/evidence_manager.py`):**
+  - File upload with strict magic-byte validation (PDF, PNG, JPG, CSV, TXT, XLSX) and 10 MB size limits.
+  - Safe storage path traversal defense with unique UUID server-side storage naming.
+  - SHA-256 cryptographic hashing with on-demand local file integrity checks (`Verified`, `Hash mismatch`, `File missing`).
+  - Comprehensive 4-tier auditor review workflow (`Pending Review`, `Accepted`, `Needs Clarification`, `Rejected`) with mandatory reviewer name, notes, and quality ratings (relevance, sufficiency, reliability).
+  - Many-to-many evidence-to-control mapping backed by SQLite cross-assessment database isolation triggers.
+- **Control Testing Documentation (`services/gap_engine.py`):**
+  - Structured test recording for Design effectiveness, Operating effectiveness, Walkthroughs, Document reviews, and Configuration reviews.
+  - Enforced test conclusion governance (Pass, Fail, Inconclusive, Not tested) requiring documented expected and observed outcomes.
+- **Automated Gap Analysis & Deficiency Engine (`pages/gap_analysis_page.py`):**
+  - Heuristic detection of implementation gaps, failed tests, evidence deficiencies, and pending controls without auto-mutating manual control evaluations.
+  - One-click promotion from identified gaps into formal audit findings.
+- **Formal CCCER Audit Findings Lifecycle:**
+  - Comprehensive 5-part CCCER methodology: Criteria, Condition, Cause, Effect/Impact, Recommendation.
+  - Mandatory evidence references or explicitly documented evidence limitations.
+  - Severity classification (Critical, High, Medium, Low, Informational) and non-conformity types.
+  - Strict closure governance requiring auditor verification notes before transitioning to `Closed`.
+  - Full working-paper traceability view: Control -> Evidence -> Test Record -> Formal Finding.
+- **Expanded Fictional Demonstration Dataset (FinCore Technologies):**
+  - Pre-seeded with 5 original evidence artifacts, 1 failed operating effectiveness test (`TST-001` on `A.8.5`), and 1 confirmed High-severity finding (`FND-001` on `A.8.5`).
+  - Completely repeat-safe / idempotent generation.
 
 ---
 
@@ -83,10 +102,10 @@ No external LLM APIs, paid services, microservices, or complex container depende
 To explore AuditSphere with a pre-populated, realistic simulated assessment:
 
 1. Launch the application: `streamlit run app.py`
-2. Navigate to **ISO 27001 Control Assessment** or **Overview Dashboard**.
-3. Click the **"Load Demo Data (FinCore)"** button.
+2. Navigate to **Overview Dashboard**, **ISO 27001 Control Assessment**, **Evidence Management**, or **Gap Analysis & Findings**.
+3. Click the **"Load Demo Data (FinCore)"** button if not already loaded.
 4. The system will load the fictional assessment for **FinCore Technologies** ($ID\ \#2$).
-5. Inspect the 12 evaluated controls, audit observations, testing notes, and live readiness charts.
+5. Inspect the 12 evaluated controls, 5 evidence files with SHA-256 verification, failed control test `TST-001`, and corroborated finding `FND-001`.
 
 ---
 
@@ -136,10 +155,10 @@ Access the interface at: `http://localhost:8501`
 
 ## 7. Running Automated Tests
 
-Run the full pytest suite (covering Phase 1 and Phase 2):
+Run the full pytest suite (covering Phase 1, Phase 2, and Phase 3):
 
 ```bash
 pytest tests/ -v
 ```
 
-All 30 automated unit and integration tests pass with 100% success.
+All 43 automated unit and integration tests pass with 100% success.

@@ -60,6 +60,7 @@ AuditSphere is a portfolio-grade Governance, Risk and Compliance (GRC) platform 
 erDiagram
     assessments ||--o{ control_assessments : "contains"
     assessments ||--o{ evidence : "holds"
+    assessments ||--o{ control_tests : "executes"
     assessments ||--o{ findings : "identifies"
     assessments ||--o{ risks : "evaluates"
     assessments ||--o{ remediation : "tracks"
@@ -70,6 +71,7 @@ erDiagram
     control_assessments ||--o{ control_evidence : "supported by"
     evidence ||--o{ control_evidence : "mapped to"
 
+    control_assessments ||--o{ control_tests : "verified by"
     control_assessments ||--o{ findings : "originates"
     findings ||--o{ risks : "manifests"
     findings ||--o{ remediation : "remediated by"
@@ -144,6 +146,24 @@ erDiagram
         int evidence_id FK
         string mapped_at
         string notes
+    }
+
+    control_tests {
+        int id PK
+        int assessment_id FK
+        int control_assessment_id FK
+        string test_reference
+        string test_type
+        string testing_objective
+        string testing_procedure
+        string sample_examined
+        string assessment_period
+        string expected_result
+        string observed_result
+        string conclusion
+        string assessor_name
+        string testing_date
+        string created_at
     }
 
     findings {
@@ -225,9 +245,10 @@ erDiagram
 To prevent evidence, findings, and risks from one assessment accidentally becoming mapped to another assessment, SQLite triggers are compiled directly into the database engine:
 
 1. `trg_prevent_cross_assessment_control_evidence_insert / update`: Aborts operation if `control_assessments.assessment_id != NEW.assessment_id` or `evidence.assessment_id != NEW.assessment_id`.
-2. `trg_prevent_cross_assessment_finding_insert / update`: Aborts operation if `control_assessments.assessment_id != NEW.assessment_id`.
-3. `trg_prevent_cross_assessment_risk_insert / update`: Aborts operation if `findings.assessment_id != NEW.assessment_id`.
-4. `trg_prevent_cross_assessment_remediation_insert / update`: Aborts operation if `findings.assessment_id != NEW.assessment_id` or `risks.assessment_id != NEW.assessment_id`.
+2. `trg_prevent_cross_assessment_control_test_insert / update`: Aborts operation if `control_assessments.assessment_id != NEW.assessment_id`.
+3. `trg_prevent_cross_assessment_finding_insert / update`: Aborts operation if `control_assessments.assessment_id != NEW.assessment_id`.
+4. `trg_prevent_cross_assessment_risk_insert / update`: Aborts operation if `findings.assessment_id != NEW.assessment_id`.
+5. `trg_prevent_cross_assessment_remediation_insert / update`: Aborts operation if `findings.assessment_id != NEW.assessment_id` or `risks.assessment_id != NEW.assessment_id`.
 
 ---
 
@@ -248,3 +269,25 @@ To prevent evidence, findings, and risks from one assessment accidentally becomi
      +-----------------+  | (Obs + Rec Req) |  +----------------+
                           +-----------------+
 ```
+
+---
+
+## 6. Phase 3 Working-Paper Assurance Architecture
+
+Phase 3 implements end-to-end audit traceability from control implementation to corroborated finding:
+
+```
+[ Annex A Control ] <---(many-to-many)---> [ Mapped Evidence Files ]
+        |                                             |
+        v                                             |
+[ Control Test (Design/Operating) ]                   |
+        |                                             |
+        v                                             v
+[ Corroborated Audit Finding (CCCER: Criteria, Condition, Cause, Effect, Recommendation) ]
+```
+
+### Key Components:
+- **Evidence Manager (`services/evidence_manager.py`):** Ingestion validation (magic bytes, extensions, size), SHA-256 integrity verification, safe storage path traversal defense, and 4-tier review workflow (`Pending Review`, `Accepted`, `Needs Clarification`, `Rejected`).
+- **Gap & Findings Engine (`services/gap_engine.py`):** Structured testing documentation, diagnostic gap detection (failed tests, partial implementations, evidence deficiencies), formal CCCER finding creation, and verified closure governance.
+- **Evidence Management Workspace (`pages/evidence_page.py`):** Centralized file repository, audit review actions, and SHA-256 integrity check controls.
+- **Gap Analysis & Findings Workspace (`pages/gap_analysis_page.py`):** Deficiency diagnostics, formal findings directory, promotion workflow, and working-paper traceability matrix.

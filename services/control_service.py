@@ -498,6 +498,9 @@ def create_fincore_demo_assessment(db_path: Optional[str] = None) -> Dict[str, A
                 db_path=db_path,
             )
 
+    # Seed Phase 3 Evidence, Testing, and Findings records
+    seed_fincore_phase3_artifacts(asm_id, db_path=db_path)
+
     # Verify metrics for demonstration dataset
     controls = get_assessment_controls(asm_id, db_path=db_path)
     metrics = calculate_overall_metrics(controls)
@@ -506,3 +509,231 @@ def create_fincore_demo_assessment(db_path: Optional[str] = None) -> Dict[str, A
         "assessment": get_assessment(asm_id, db_path=db_path),
         "metrics": metrics,
     }
+
+
+def seed_fincore_phase3_artifacts(asm_id: int, db_path: Optional[str] = None) -> None:
+    """
+    Seed original fictional audit evidence files, control testing records, and formal
+    findings for FinCore Technologies demonstration assessment.
+    Repeat-safe / idempotent.
+    """
+    from services.evidence_manager import (
+        upload_evidence,
+        review_evidence,
+        verify_evidence_integrity,
+    )
+    from services.gap_engine import create_control_test, create_finding
+
+    with db_session(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM evidence WHERE assessment_id = ?", (asm_id,))
+        ev_count = cursor.fetchone()[0]
+
+        cursor.execute(
+            """
+            SELECT ca.id, c.control_identifier
+            FROM control_assessments ca
+            JOIN controls c ON ca.control_id = c.id
+            WHERE ca.assessment_id = ?
+            """,
+            (asm_id,),
+        )
+        ca_map = {r["control_identifier"]: r["id"] for r in cursor.fetchall()}
+
+    # 1. Seed Evidence Files if none exist
+    if ev_count == 0:
+        evidence_defs = [
+            {
+                "title": "Corporate Information Access Control Policy v3.2",
+                "file_name": "FIN-POL-001_Access_Control_Policy_v3.2.txt",
+                "content": (
+                    "FINCORE TECHNOLOGIES INC. - INFORMATION ACCESS CONTROL POLICY\n"
+                    "Document Reference: POL-SEC-001 | Version: 3.2 | Classification: Confidential\n"
+                    "Effective Date: 2026-01-10 | Review Owner: CISO\n\n"
+                    "1. PURPOSE & SCOPE\n"
+                    "This policy defines mandatory requirements for user identity management, credential complexity,\n"
+                    "least privilege authorization, and privileged access safeguards across all FinCore payment enclaves.\n\n"
+                    "2. ACCESS PROVISIONING & DE-PROVISIONING\n"
+                    "All access requests require documented department head approval. User offboarding must be executed\n"
+                    "via automated SCIM synchronization within 4 hours of HR notification.\n\n"
+                    "3. ACCESS RE-CERTIFICATION\n"
+                    "Quarterly access re-certification campaigns must be completed by line managers for all sensitive systems.\n"
+                ).encode("utf-8"),
+                "type": "Security policy",
+                "dept": "Information Security & Compliance",
+                "controls": ["A.5.15", "A.5.18"],
+                "review_status": "Accepted",
+                "confidence": "High",
+                "review_notes": "Comprehensive access control policy covering least privilege, RBAC, and de-provisioning workflows. Duly signed by CISO.",
+            },
+            {
+                "title": "Okta Adaptive MFA Global Policy Rule Configuration Export",
+                "file_name": "FIN-CFG-002_Okta_MFA_Enforcement_Export.txt",
+                "content": (
+                    "OKTA TENANT POLICY EXPORT - FINCORE PRODUCTION (tenant: fincore.okta.com)\n"
+                    "Generated: 2026-04-12T09:15:00Z | Exported By: iam-admin@fincore.internal\n\n"
+                    "RULE: Global-Default-MFA\n"
+                    "- Status: ACTIVE\n"
+                    "- Priority: 1\n"
+                    "- Enforce MFA: Prompt on every untrusted network or device session\n"
+                    "- Allowed Factors: FIDO2 / WebAuthn, Okta Verify Push, TOTP\n"
+                    "- SMS/Email Factors: DISABLED (Phishing-resistance enforcement)\n\n"
+                    "EXCEPTION POLICY: Legacy-Partner-VPN-Rule\n"
+                    "- Status: ACTIVE\n"
+                    "- Target Endpoint: gw-legacy.fincore.internal\n"
+                    "- Policy: Passwords only (Bypass MFA - Temp contractor access)\n"
+                    "- WARNING: Policy flagged for deprecation in Q1 2025; currently overdue.\n"
+                ).encode("utf-8"),
+                "type": "Configuration record",
+                "dept": "Identity & Access Management",
+                "controls": ["A.8.5"],
+                "review_status": "Accepted",
+                "confidence": "High",
+                "review_notes": "Direct configuration export confirming global MFA enforcement in Okta, but also demonstrating an active MFA exception on legacy contractor VPN.",
+            },
+            {
+                "title": "AWS RDS Automated Snapshot Restoration Drill Execution Log",
+                "file_name": "FIN-LOG-003_RDS_Restoration_Test_Failure.txt",
+                "content": (
+                    "AWS CLOUDWATCH AUTOMATION LOG - DISASTER RECOVERY DRILL\n"
+                    "Execution ID: exec-dr-2026-03-20-001\n"
+                    "Target Database: rds-prod-pg-payments-primary\n"
+                    "Snapshot ID: rds:rds-prod-pg-payments-2026-03-19-03-00\n"
+                    "Initiated By: scheduled-ssm-maintenance-dr-drill\n\n"
+                    "[2026-03-20T02:00:10Z] INFO: Initiating snapshot restore to isolated VPC subnet-0814a...\n"
+                    "[2026-03-20T02:14:32Z] INFO: DB instance creating... status: creating\n"
+                    "[2026-03-20T02:45:00Z] ERROR: Restore timeout exceeded (45 minutes). Target RTO threshold breached (RTO Target: 30 minutes).\n"
+                    "[2026-03-20T02:45:05Z] ERROR: KMS Decryption Permission Denied for cross-account KMS key alias/fin-backup-key-dr.\n"
+                    "[2026-03-20T02:45:10Z] FAILED: DR restoration failed to achieve ready status. Drill terminated with failure code E_KMS_AUTH_FAIL.\n"
+                ).encode("utf-8"),
+                "type": "System log",
+                "dept": "Cloud Platform Operations",
+                "controls": ["A.8.13"],
+                "review_status": "Accepted",
+                "confidence": "High",
+                "review_notes": "Restoration drill log demonstrates backup restoration failure due to cross-account KMS decryption permissions and timeout.",
+            },
+            {
+                "title": "FY2026 Annual Security Awareness and Phishing Campaign Roster",
+                "file_name": "FIN-REC-004_FY26_Security_Awareness_Attendance.csv",
+                "content": (
+                    "Employee_ID,Name,Department,Assigned_Course,Completion_Date,Status,Phishing_Sim_Result\n"
+                    "EMP-1001,Johnathan Doe,Engineering,Core InfoSec 2026,2026-02-15,Completed,Passed\n"
+                    "EMP-1002,Sarah Jenkins,Finance,Core InfoSec 2026,2026-02-18,Completed,Passed\n"
+                    "EMP-1003,Marcus Vance,Compliance,Core InfoSec 2026,2026-01-20,Completed,Passed\n"
+                    "EMP-1004,Elena Rostova,Customer Support,Core InfoSec 2026,,Overdue,Failed\n"
+                    "EMP-1005,Tariq Al-Mansoor,Sales,Core InfoSec 2026,,Overdue,Reported\n"
+                    "EMP-1006,Chloe Bennett,Marketing,Core InfoSec 2026,2026-03-01,Completed,Passed\n"
+                    "EMP-1007,David Miller,DevOps,Core InfoSec 2026,,Overdue,Passed\n"
+                ).encode("utf-8"),
+                "type": "Training record",
+                "dept": "People Operations & HR",
+                "controls": ["A.6.3"],
+                "review_status": "Needs Clarification",
+                "confidence": "Medium",
+                "review_notes": "Sample attendance log shows 3 out of 7 sampled records overdue (completion rate approx 74% organization-wide). Clarification requested regarding HR escalation procedure.",
+            },
+            {
+                "title": "Privileged Infrastructure Access and IAM Administrator Inventory",
+                "file_name": "FIN-REC-005_Privileged_Accounts_Inventory.txt",
+                "content": (
+                    "FINCORE TECHNOLOGIES - PRIVILEGED ACCESS INVENTORY\n"
+                    "Quarterly Re-certification Cycle: Q1 2026 | Date: 2026-03-31\n\n"
+                    "DOMAIN / PLATFORM: AWS Production Cloud\n"
+                    "- Total IAM Roles with AdministratorAccess: 4\n"
+                    "- Break-glass root accounts: Protected via hardware YubiKey in physical safe\n"
+                    "- Active federated Admin users: 6 engineers\n\n"
+                    "DOMAIN: Active Directory Corporate HQ\n"
+                    "- Domain Admins group count: 5 named users\n"
+                    "- Service Accounts with elevated rights: 8 accounts (password rotation managed via CyberArk)\n"
+                    "- Status: Re-certification signed off by IT Director on 2026-04-02.\n"
+                ).encode("utf-8"),
+                "type": "Access record",
+                "dept": "IT Security Operations",
+                "controls": ["A.5.18"],
+                "review_status": "Accepted",
+                "confidence": "High",
+                "review_notes": "Verified privileged access roster. Hardware MFA confirmed for root break-glass accounts.",
+            },
+        ]
+
+        for ed in evidence_defs:
+            mapped_cids = [ca_map[ident] for ident in ed["controls"] if ident in ca_map]
+            ev = upload_evidence(
+                assessment_id=asm_id,
+                title=ed["title"],
+                file_name=ed["file_name"],
+                file_bytes=ed["content"],
+                evidence_type=ed["type"],
+                description=ed["title"],
+                source_department=ed["dept"],
+                collection_date="2026-05-15",
+                uploaded_by="Marcus Vance, Lead Auditor ISO 27001",
+                mapped_control_ids=mapped_cids,
+                db_path=db_path,
+            )
+            # Review the evidence
+            review_evidence(
+                evidence_id=ev["id"],
+                review_status=ed["review_status"],
+                reviewer_name="Marcus Vance, Lead Auditor ISO 27001",
+                reviewer_notes=ed["review_notes"],
+                relevance_rating="Highly Relevant",
+                sufficiency_rating="Sufficient",
+                reliability_rating="Reliable",
+                db_path=db_path,
+            )
+            # Verify file integrity
+            verify_evidence_integrity(evidence_id=ev["id"], db_path=db_path)
+
+    # 2. Seed Control Test if none exist
+    with db_session(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM control_tests WHERE assessment_id = ?", (asm_id,))
+        test_count = cursor.fetchone()[0]
+
+    if test_count == 0 and "A.8.5" in ca_map:
+        a85_ca_id = ca_map["A.8.5"]
+        create_control_test(
+            assessment_id=asm_id,
+            control_assessment_id=a85_ca_id,
+            test_type="Operating effectiveness",
+            testing_objective="Verify mandatory multi-factor authentication enforcement across all external ingress paths and administrative entry points.",
+            testing_procedure="Sampled 25 interactive login attempts across corporate VPN gateways, customer support portal, and bastion jump hosts.",
+            expected_result="100% of logins enforce secondary challenge (hardware security key or authenticator push notification).",
+            observed_result="Legacy VPN portal 'gw-legacy.fincore.internal' permitted password-only authentication for 12 contractor accounts without secondary MFA challenge.",
+            conclusion="Fail",
+            sample_examined="25 administrator and contractor access logs from Okta and VPN gateways",
+            assessment_period="2026-01-01 to 2026-04-30",
+            supporting_evidence_references="FIN-CFG-002",
+            assessor_name="Marcus Vance, Lead Auditor ISO 27001",
+            testing_date="2026-05-15",
+            db_path=db_path,
+        )
+
+    # 3. Seed Formal Finding if none exist
+    with db_session(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM findings WHERE assessment_id = ?", (asm_id,))
+        fnd_count = cursor.fetchone()[0]
+
+    if fnd_count == 0 and "A.8.5" in ca_map:
+        a85_ca_id = ca_map["A.8.5"]
+        create_finding(
+            assessment_id=asm_id,
+            control_assessment_id=a85_ca_id,
+            title="Single-Factor Authentication Permitted on Legacy Remote Access Gateway",
+            criteria="ISO/IEC 27001:2022 Control A.8.5 (Secure authentication) mandates that authentication systems prevent unauthorized access through robust authentication mechanisms, specifically requiring multi-factor authentication for remote access.",
+            condition="During operating effectiveness testing (TST-001), 12 third-party contractor accounts were verified accessing production network segments via legacy gateway 'gw-legacy.fincore.internal' using single-factor password authentication without MFA.",
+            cause="Legacy gateway configuration was excluded from recent Okta SSO/MFA migration roadmap due to perceived deprecation timelines.",
+            effect="Elevated risk of unauthorized network intrusion, credential stuffing exploitation, and lateral movement into the customer payment processing zone.",
+            recommendation="Decommission legacy gateway gw-legacy.fincore.internal immediately and route all remote access through the centralized Okta SAML proxy with mandatory WebAuthn/push MFA.",
+            severity="High",
+            finding_type="Major Non-Conformity",
+            status="Open",
+            supporting_evidence_references="FIN-CFG-002",
+            supporting_test_references="TST-001",
+            responsible_department="Infrastructure & Network Engineering",
+            assessor_name="Marcus Vance, Lead Auditor ISO 27001",
+            db_path=db_path,
+        )
