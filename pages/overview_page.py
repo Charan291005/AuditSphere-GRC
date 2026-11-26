@@ -1,13 +1,17 @@
 """
 Overview Dashboard page view for AuditSphere.
 
-Displays genuine metrics derived strictly from the SQLite database.
-Does not fabricate compliance percentages or mock results.
+Displays genuine metrics and visualizations derived strictly from SQLite database records.
+Integrates live Phase 2 control assessment posture, coverage, weighted readiness scores,
+and category breakdowns using Plotly. Does not display synthetic or fake percentages.
 """
 
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
 from services.dashboard_service import get_dashboard_summary
+from services.control_service import create_fincore_demo_assessment
 from ui_components import (
     render_kpi_card,
     render_status_badge,
@@ -15,6 +19,15 @@ from ui_components import (
     render_empty_state,
     render_educational_disclaimer,
 )
+
+# Professional GRC accessible color palette
+STATUS_COLORS = {
+    "Implemented": "#15803D",
+    "Partially Implemented": "#D97706",
+    "Not Implemented": "#DC2626",
+    "Not Assessed": "#9CA3AF",
+    "Not Applicable": "#4B5563",
+}
 
 
 def render_overview_page():
@@ -116,8 +129,13 @@ def render_overview_page():
         else:
             render_empty_state(
                 title="No Active Assessment Selected",
-                message="Select an active assessment from the left sidebar or the Assessment Management module to load its contextual workspace.",
+                message="Select an active assessment from the left sidebar or Assessment Management to load its contextual workspace.",
             )
+            if st.button("Load FinCore Technologies Demo Assessment"):
+                demo = create_fincore_demo_assessment()
+                st.session_state["active_assessment_id"] = demo["assessment"]["id"]
+                st.success("Loaded FinCore Technologies demonstration assessment.")
+                st.rerun()
 
     with c_right:
         st.markdown(
@@ -156,6 +174,91 @@ def render_overview_page():
 
     st.markdown("<hr/>", unsafe_allow_html=True)
 
+    # PHASE 2: CONTROL READINESS & COMPLIANCE TELEMETRY
+    st.markdown(
+        '<div class="grc-card-title">ISO/IEC 27001:2022 Control Implementation Posture (Selected 20 Controls)</div>',
+        unsafe_allow_html=True,
+    )
+
+    ctrl_metrics = summary.get("control_metrics")
+    if ctrl_metrics and active:
+        # Control KPI row
+        k1, k2, k3, k4, k5, k6, k7 = st.columns(7)
+        with k1:
+            render_kpi_card(
+                label="Selected Controls",
+                value=f"{ctrl_metrics['total_controls']}",
+                description="Annex A subset",
+            )
+        with k2:
+            cov_str = (
+                f"{ctrl_metrics['coverage_pct']:.1f}%"
+                if ctrl_metrics["coverage_pct"] is not None
+                else "N/A"
+            )
+            render_kpi_card(
+                label="Coverage",
+                value=cov_str,
+                description=f"{ctrl_metrics['assessed_controls']} / {ctrl_metrics['applicable_controls']} assessed",
+            )
+        with k3:
+            read_str = (
+                f"{ctrl_metrics['weighted_readiness_pct']:.1f}%"
+                if ctrl_metrics["weighted_readiness_pct"] is not None
+                else "N/A"
+            )
+            render_kpi_card(
+                label="Weighted Readiness",
+                value=read_str,
+                description="Assessed controls score",
+            )
+        with k4:
+            render_kpi_card(
+                label="Implemented",
+                value=ctrl_metrics["status_counts"].get("Implemented", 0),
+                description="Full conformity",
+            )
+        with k5:
+            render_kpi_card(
+                label="Potential Gaps",
+                value=ctrl_metrics["potential_gaps"],
+                description="Partial + Not Impl.",
+            )
+        with k6:
+            render_kpi_card(
+                label="Pending",
+                value=ctrl_metrics["pending_controls"],
+                description="Not assessed yet",
+            )
+        with k7:
+            render_kpi_card(
+                label="Not Applicable",
+                value=ctrl_metrics["status_counts"].get("Not Applicable", 0),
+                description="Out of scope",
+            )
+
+        # Plotly Visualizations Row
+        st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+        g1, g2 = st.columns([1, 1])
+
+        with g1:
+            _render_status_donut_chart(ctrl_metrics["status_counts"])
+
+        with g2:
+            _render_category_progress_chart(ctrl_metrics["category_summary"])
+
+        # Category Readiness Score Bar Chart
+        st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+        _render_category_readiness_bar(ctrl_metrics["category_summary"])
+
+    else:
+        render_empty_state(
+            title="No Control Evaluations Available",
+            message="Select an active assessment to view control implementation posture, or navigate to ISO 27001 Control Assessment to evaluate controls.",
+        )
+
+    st.markdown("<hr/>", unsafe_allow_html=True)
+
     # Activity Stream Row
     st.markdown(
         '<div class="grc-card-title">Recent Assessment Activity</div>',
@@ -166,13 +269,15 @@ def render_overview_page():
     if activities:
         rows = []
         for act in activities:
-            # Parse readable timestamp
             time_str = act["timestamp"].replace("T", " ").replace("Z", " UTC")
+            ctrl_ref = act.get("control_reference") or "-"
             rows.append(
                 {
                     "Timestamp": time_str,
-                    "Assessment": act.get("assessment_title") or f"ID #{act.get('assessment_id')}",
-                    "Event": act["event_type"].replace("ASSESSMENT_", "").title(),
+                    "Assessment": act.get("assessment_title")
+                    or f"ID #{act.get('assessment_id')}",
+                    "Control Ref": ctrl_ref,
+                    "Event": act["event_type"].replace("ASSESSMENT_", "").replace("CONTROL_", "").title(),
                     "Description": act["description"],
                     "Actor": act["actor"],
                 }
@@ -187,15 +292,139 @@ def render_overview_page():
     else:
         render_empty_state(
             title="No Activity Logged Yet",
-            message="Assessment lifecycle events (creation, edits, archival) will automatically appear in this feed.",
+            message="Assessment lifecycle and control evaluation events will automatically appear in this feed.",
         )
 
-    # Future Modules Notice
+    # Subsequent Modules Notice
     st.markdown(
         """
         <div style="margin-top: 1.5rem; padding: 0.85rem 1rem; background-color: #FFFFFF; border: 1px dashed #D1D5DB; border-radius: 4px; font-size: 0.825rem; color: #6B7280;">
-            <strong>Subsequent Phase Modules:</strong> ISO 27001 Control Compliance metrics, Gap Severity Distribution, and Risk Heatmaps will be activated in Phases 2 and 3. In compliance with strict GRC integrity standards, no artificial or mock percentages are displayed.
+            <strong>Phase 3 Scope Notice:</strong> Formal audit evidence files, quantitative risk registers, and remediation CAP tracking workflows will be activated in Phase 3. In compliance with strict GRC integrity standards, no artificial or mock percentages are displayed.
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+
+def _render_status_donut_chart(status_counts: Dict[str, int]):
+    """Render Plotly donut chart showing implementation status breakdown."""
+    st.markdown("**Control Implementation Status Distribution**")
+
+    labels = ["Implemented", "Partially Implemented", "Not Implemented", "Not Assessed", "Not Applicable"]
+    values = [status_counts.get(l, 0) for l in labels]
+    colors = [STATUS_COLORS[l] for l in labels]
+
+    if sum(values) == 0:
+        st.info("No controls to display.")
+        return
+
+    fig = go.Figure(
+        data=[
+            go.Pie(
+                labels=labels,
+                values=values,
+                hole=0.48,
+                marker=dict(colors=colors, line=dict(color="#FFFFFF", width=1.5)),
+                textinfo="value+percent",
+                hoverinfo="label+value+percent",
+                sort=False,
+            )
+        ]
+    )
+
+    fig.update_layout(
+        margin=dict(t=10, b=10, l=10, r=10),
+        height=260,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=10)),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_category_progress_chart(cat_summary: Dict[str, Dict[str, Any]]):
+    """Render stacked horizontal bar chart showing control statuses per domain."""
+    st.markdown("**Assessment Progress by Control Theme**")
+
+    categories = ["Organizational", "People", "Physical", "Technological"]
+    statuses = ["Implemented", "Partially Implemented", "Not Implemented", "Not Assessed", "Not Applicable"]
+
+    data = []
+    for s in statuses:
+        s_key = s.lower().replace(" ", "_")
+        vals = [cat_summary.get(c, {}).get(s_key, 0) for c in categories]
+        data.append(
+            go.Bar(
+                name=s,
+                y=categories,
+                x=vals,
+                orientation="h",
+                marker=dict(color=STATUS_COLORS[s]),
+            )
+        )
+
+    fig = go.Figure(data=data)
+    fig.update_layout(
+        barmode="stack",
+        margin=dict(t=10, b=10, l=10, r=10),
+        height=260,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=10)),
+        xaxis=dict(title="Number of Controls", dtick=2),
+        yaxis=dict(autorange="reversed"),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_category_readiness_bar(cat_summary: Dict[str, Dict[str, Any]]):
+    """Render bar chart showing Weighted Readiness Score (%) across the 4 themes."""
+    st.markdown("**Domain Weighted Readiness Scores (%)**")
+
+    categories = ["Organizational", "People", "Physical", "Technological"]
+    readiness_vals = []
+    coverage_vals = []
+
+    for c in categories:
+        data = cat_summary.get(c, {})
+        r = data.get("weighted_readiness_pct")
+        readiness_vals.append(r if r is not None else 0.0)
+        cov = data.get("coverage_pct")
+        coverage_vals.append(cov if cov is not None else 0.0)
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            name="Weighted Readiness (%)",
+            x=categories,
+            y=readiness_vals,
+            marker_color="#751C35",
+            text=[f"{v:.1f}%" if v > 0 else "N/A" for v in readiness_vals],
+            textposition="auto",
+        )
+    )
+    fig.add_trace(
+        go.Bar(
+            name="Assessment Coverage (%)",
+            x=categories,
+            y=coverage_vals,
+            marker_color="#D1D5DB",
+            text=[f"{v:.1f}%" if v > 0 else "0%" for v in coverage_vals],
+            textposition="auto",
+        )
+    )
+
+    fig.update_layout(
+        barmode="group",
+        yaxis=dict(title="Percentage (%)", range=[0, 105]),
+        margin=dict(t=20, b=10, l=10, r=10),
+        height=260,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=11)),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+    )
+
+    st.plotly_chart(fig, use_container_width=True)

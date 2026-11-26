@@ -27,64 +27,73 @@ AuditSphere solves this by providing a unified assessment workspace with structu
 - **Database Engine:** SQLite (WAL Mode, Parameterized Queries, Foreign Keys Enforced)
 - **Data & Visualizations:** Pandas, Plotly
 - **Document Generation:** ReportLab
-- **Testing:** Pytest
+- **Testing:** Pytest (30 automated tests)
 - **VCS:** Git
 
 No external LLM APIs, paid services, microservices, or complex container dependencies are required.
 
 ---
 
-## 3. Implemented Phase 1 Functionality
+## 3. Implemented Capabilities
 
-- **Project Foundation:**
-  - Standard enterprise directory structure (`pages/`, `services/`, `data/`, `storage/`, `tests/`, `docs/`).
-  - Strict `.gitignore` preventing database files or uploaded artifacts from being committed.
-  - Streamlit configuration with custom enterprise palette (Primary accent: `#751C35`).
-- **Relational Database Foundation:**
-  - Idempotent schema initialization across 9 tables: `assessments`, `controls`, `control_assessments`, `evidence`, `control_evidence`, `findings`, `risks`, `remediation`, `activity_log`.
-  - SQLite foreign key enforcement enabled on every connection.
-  - Multi-level triggers ensuring cross-assessment relational isolation.
-- **Application Shell & Design System:**
-  - Persistent left sidebar with AuditSphere branding and active assessment selector.
-  - Navigation across all 9 planned modules with Phase status labeling.
-  - Custom CSS styling with accessible contrast, professional card hierarchy, and status badges.
-- **Assessment Management Module (Fully Functional):**
-  - Create assessments (Title, Organization, Industry, Scope, Objectives, Lead Assessor, Target Date, Initial Status).
-  - Validation of mandatory inputs and date formats.
-  - Directory view with status filter, search query, and active workspace indicator.
-  - Inline editing of existing assessments.
-  - Archival of assessments.
-- **Overview Dashboard (Fully Functional):**
-  - Live KPI cards calculated directly from SQLite records (Total, Active, Archived, Current Context).
-  - Active assessment scope and detail card.
-  - Assessment pipeline status breakdown.
-  - Activity log stream showing recent lifecycle events.
-  - Zero hardcoded or fake compliance metrics.
-- **Activity Logging:**
-  - Automatic recording of `ASSESSMENT_CREATED`, `ASSESSMENT_EDITED`, and `ASSESSMENT_ARCHIVED` events.
-- **Automated Verification:**
-  - 10 comprehensive unit and integration tests passing with 100% success.
+### Phase 1 Foundation
+- Enterprise directory structure and strict `.gitignore` (database and uploaded files are never committed).
+- Idempotent SQLite relational schema across 9 tables with foreign keys and multi-level triggers preventing cross-assessment linking.
+- Assessment Management: Create, edit, filter, archive, and select active assessment workspaces.
+- Overview Dashboard with genuine database-derived KPIs and operational activity logging.
+
+### Phase 2: ISO 27001 Selected-Control Assessment Engine
+- **Educational Control Catalogue (`data/controls.json`):**
+  - Exactly **20 selected Annex A controls** representing all four ISO/IEC 27001:2022 themes:
+    - **Organizational (6):** `A.5.1`, `A.5.15`, `A.5.18`, `A.5.24`, `A.5.31`, `A.5.34`
+    - **People (4):** `A.6.1`, `A.6.3`, `A.6.6`, `A.6.8`
+    - **Physical (4):** `A.7.1`, `A.7.2`, `A.7.4`, `A.7.7`
+    - **Technological (6):** `A.8.2`, `A.8.5`, `A.8.8`, `A.8.13`, `A.8.15`, `A.8.24`
+  - Each control includes control ID, Annex A reference, objective, paraphrased description, practical assessment questions, suggested evidence types, example gaps, and remediation guidance.
+- **Control Evaluation Workspace (`pages/control_assessment_page.py`):**
+  - Real-time search by reference, title, or owner.
+  - Domain filter (Organizational, People, Physical, Technological) and status filter.
+  - Interactive assessment form supporting: Implementation Status, Control Owner, Assessment Observation, Testing Notes, Evidence References, Recommendation, Applicability Justification, Assessor Name, and Assessment Date.
+  - **Strict Validation Rules:**
+    - `Implemented` controls require documented observations.
+    - `Partially Implemented` and `Not Implemented` require observations and recommendations.
+    - `Not Applicable` requires an applicability justification.
+    - Assessed controls require assessor name and assessment date.
+    - Archived assessments are strictly protected against modifications.
+- **Deterministic Assessment Scoring Engine (`services/assessment_engine.py`):**
+  - **Applicable Controls:** Selected controls excluding `Not Applicable`.
+  - **Assessed Applicable Controls:** Controls marked `Implemented`, `Partially Implemented`, or `Not Implemented`.
+  - **Assessment Coverage (%):** $(\text{Assessed Applicable} / \text{Total Applicable}) \times 100$.
+  - **Weighted Readiness Score (%):** $(\text{Implemented} + 0.5 \times \text{Partially Implemented}) / \text{Assessed Applicable} \times 100$.
+  - **Potential Control Gaps:** $\text{Partially Implemented} + \text{Not Implemented}$.
+  - Zero-assessed or zero-applicable assessments display `N/A`.
+- **Upgraded Overview Dashboard (`pages/overview_page.py`):**
+  - Live control assessment KPI cards.
+  - Plotly donut chart of control implementation status distribution.
+  - Plotly stacked bar chart of assessment progress by control theme.
+  - Plotly grouped bar chart of domain weighted readiness scores.
+- **Fictional Demonstration Dataset (FinCore Technologies):**
+  - Repeat-safe demo generator seeding 20 controls: 7 Implemented, 3 Partially Implemented, 2 Not Implemented, 8 Not Assessed, 0 Not Applicable.
+  - Produces exact verified metrics: 60.0% Coverage, 70.83% Weighted Readiness, 5 Potential Gaps, 8 Pending.
 
 ---
 
-## 4. Planned Functionality (Subsequent Phases)
+## 4. Demonstration Dataset Instructions
 
-- **Phase 2:**
-  - ISO/IEC 27001:2022 Control Assessment Module (Annex A domains).
-  - Evidence Management (Upload, SHA-256 integrity hashing, control mapping).
-  - Gap Analysis (Findings taxonomy, CCCER structure).
-- **Phase 3:**
-  - Qualitative Risk Register (5x5 matrix, inherent vs residual risk).
-  - Remediation Tracker (Corrective Action Plans, target dates, verification).
-  - Assessment Reports (Executive PDF summary export via ReportLab, CSV exports).
-  - System Settings & Framework Customization.
+To explore AuditSphere with a pre-populated, realistic simulated assessment:
+
+1. Launch the application: `streamlit run app.py`
+2. Navigate to **ISO 27001 Control Assessment** or **Overview Dashboard**.
+3. Click the **"Load Demo Data (FinCore)"** button.
+4. The system will load the fictional assessment for **FinCore Technologies** ($ID\ \#2$).
+5. Inspect the 12 evaluated controls, audit observations, testing notes, and live readiness charts.
 
 ---
 
 ## 5. Installation Instructions
 
 ### Prerequisites
-- Python 3.10+ (Python 3.13 recommended)
+- Python 3.10+ (Python 3.13 tested)
 - Git
 
 ### Setup
@@ -121,16 +130,16 @@ Launch the Streamlit application:
 streamlit run app.py
 ```
 
-The application will be accessible at: `http://localhost:8501`
+Access the interface at: `http://localhost:8501`
 
 ---
 
 ## 7. Running Automated Tests
 
-Run the full pytest suite:
+Run the full pytest suite (covering Phase 1 and Phase 2):
 
 ```bash
 pytest tests/ -v
 ```
 
-All 10 tests should pass cleanly without errors.
+All 30 automated unit and integration tests pass with 100% success.

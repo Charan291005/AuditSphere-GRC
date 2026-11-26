@@ -6,19 +6,23 @@ Features:
 - SQLite foreign key enforcement enabled on every connection
 - Context manager for robust transaction lifecycle (commit / rollback)
 - Strict relational integrity preventing cross-assessment linking
-- Idempotent schema initialization that preserves existing records
+- Idempotent schema initialization and repeat-safe migrations that preserve existing records
+- Automated synchronization of the ISO/IEC 27001:2022 20-control catalogue
+- Automatic initialization of Not Assessed control assessment rows for all assessments
 """
 
+import json
 import os
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Generator, Optional
+from typing import Generator, Optional, List, Dict, Any
 
-# Default path to SQLite database file
+# Paths to SQLite database and controls catalogue
 DEFAULT_DB_DIR = Path(__file__).resolve().parent / "data"
 DEFAULT_DB_PATH = DEFAULT_DB_DIR / "auditsphere.db"
+CONTROLS_JSON_PATH = DEFAULT_DB_DIR / "controls.json"
 
 
 def get_utc_now_iso() -> str:
@@ -77,7 +81,7 @@ CREATE TABLE IF NOT EXISTS assessments (
     updated_at TEXT NOT NULL
 );
 
--- 2. Reference Security Controls (ISO/IEC 27001:2022)
+-- 2. Reference Security Controls (ISO/IEC 27001:2022 20-Control Subset)
 CREATE TABLE IF NOT EXISTS controls (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     standard TEXT NOT NULL DEFAULT 'ISO/IEC 27001:2022',
@@ -87,6 +91,11 @@ CREATE TABLE IF NOT EXISTS controls (
     description TEXT NOT NULL,
     domain TEXT NOT NULL, -- 'Organizational', 'People', 'Physical', 'Technological'
     guidance TEXT,
+    objective TEXT,
+    assessment_questions TEXT, -- JSON array of questions
+    suggested_evidence TEXT,   -- JSON array of evidence types
+    example_gaps TEXT,         -- JSON array of typical gaps
+    example_recommendations TEXT, -- JSON array of remediation guidance
     created_at TEXT NOT NULL
 );
 
@@ -102,6 +111,13 @@ CREATE TABLE IF NOT EXISTS control_assessments (
     notes TEXT,
     assessed_by TEXT,
     assessed_at TEXT,
+    control_owner TEXT,
+    assessment_observation TEXT,
+    testing_notes TEXT,
+    evidence_notes TEXT,
+    recommendation TEXT,
+    applicability_justification TEXT,
+    created_at TEXT NOT NULL DEFAULT '2026-01-01T00:00:00Z',
     updated_at TEXT NOT NULL,
     UNIQUE(assessment_id, control_id)
 );
@@ -202,9 +218,12 @@ CREATE TABLE IF NOT EXISTS remediation (
 CREATE TABLE IF NOT EXISTS activity_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     assessment_id INTEGER REFERENCES assessments(id) ON DELETE CASCADE,
-    event_type TEXT NOT NULL, -- e.g. 'ASSESSMENT_CREATED', 'ASSESSMENT_EDITED', 'ASSESSMENT_ARCHIVED'
+    event_type TEXT NOT NULL,
     description TEXT NOT NULL,
     actor TEXT NOT NULL DEFAULT 'Lead Assessor',
+    control_reference TEXT,
+    previous_status TEXT,
+    new_status TEXT,
     timestamp TEXT NOT NULL
 );
 
@@ -212,6 +231,7 @@ CREATE TABLE IF NOT EXISTS activity_log (
 CREATE INDEX IF NOT EXISTS idx_assessments_status ON assessments(status);
 CREATE INDEX IF NOT EXISTS idx_control_assessments_aid ON control_assessments(assessment_id);
 CREATE INDEX IF NOT EXISTS idx_control_assessments_cid ON control_assessments(control_id);
+CREATE INDEX IF NOT EXISTS idx_control_assessments_status ON control_assessments(status);
 CREATE INDEX IF NOT EXISTS idx_evidence_aid ON evidence(assessment_id);
 CREATE INDEX IF NOT EXISTS idx_control_evidence_caid ON control_evidence(control_assessment_id);
 CREATE INDEX IF NOT EXISTS idx_findings_aid ON findings(assessment_id);
@@ -313,11 +333,192 @@ END;
 """
 
 
+def run_migrations(conn: sqlite3.Connection) -> None:
+    """
+    Safely execute repeat-safe schema migrations for existing databases
+    created during Phase 1 to ensure all Phase 2 columns exist.
+    """
+    cursor = conn.cursor()
+
+    # 1. Migrate 'controls' table
+    cursor.execute("PRAGMA table_info(controls);")
+    controls_cols = {row["name"] for row in cursor.fetchall()}
+    columns_to_add_controls = {
+        "objective": "TEXT",
+        "assessment_questions": "TEXT",
+        "suggested_evidence": "TEXT",
+        "example_gaps": "TEXT",
+        "example_recommendations": "TEXT",
+    }
+    for col_name, col_type in columns_to_add_controls.items():
+        if col_name not in controls_cols:
+            cursor.execute(f"ALTER TABLE controls ADD COLUMN {col_name} {col_type};")
+
+    # 2. Migrate 'control_assessments' table
+    cursor.execute("PRAGMA table_info(control_assessments);")
+    ca_cols = {row["name"] for row in cursor.fetchall()}
+    columns_to_add_ca = {
+        "control_owner": "TEXT",
+        "assessment_observation": "TEXT",
+        "testing_notes": "TEXT",
+        "evidence_notes": "TEXT",
+        "recommendation": "TEXT",
+        "applicability_justification": "TEXT",
+        "created_at": "TEXT NOT NULL DEFAULT '2026-01-01T00:00:00Z'",
+    }
+    for col_name, col_type in columns_to_add_ca.items():
+        if col_name not in ca_cols:
+            cursor.execute(f"ALTER TABLE control_assessments ADD COLUMN {col_name} {col_type};")
+
+    # 3. Migrate 'activity_log' table
+    cursor.execute("PRAGMA table_info(activity_log);")
+    act_cols = {row["name"] for row in cursor.fetchall()}
+    columns_to_add_act = {
+        "control_reference": "TEXT",
+        "previous_status": "TEXT",
+        "new_status": "TEXT",
+    }
+    for col_name, col_type in columns_to_add_act.items():
+        if col_name not in act_cols:
+            cursor.execute(f"ALTER TABLE activity_log ADD COLUMN {col_name} {col_type};")
+
+
+def sync_controls_catalogue(conn: sqlite3.Connection, catalogue_path: Optional[Path] = None) -> None:
+    """
+    Idempotently sync the 20 selected ISO 27001 Annex A controls from data/controls.json into
+    the controls table. Updates metadata while preserving primary keys.
+    """
+    path = catalogue_path or CONTROLS_JSON_PATH
+    if not path.exists():
+        return
+
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    controls_list = data.get("controls", [])
+    now_iso = get_utc_now_iso()
+    cursor = conn.cursor()
+
+    for ctrl in controls_list:
+        clause = ctrl.get("clause", "Annex A")
+        ident = ctrl["control_identifier"]
+        title = ctrl["title"]
+        desc = ctrl["description"]
+        domain = ctrl["category"]
+        objective = ctrl.get("objective", "")
+        questions_json = json.dumps(ctrl.get("assessment_questions", []))
+        evidence_json = json.dumps(ctrl.get("suggested_evidence", []))
+        gaps_json = json.dumps(ctrl.get("example_gaps", []))
+        recs_json = json.dumps(ctrl.get("example_recommendations", []))
+
+        # Check if already exists
+        cursor.execute("SELECT id FROM controls WHERE control_identifier = ?", (ident,))
+        row = cursor.fetchone()
+
+        if row:
+            # Update existing control metadata
+            cursor.execute(
+                """
+                UPDATE controls
+                SET clause = ?, title = ?, description = ?, domain = ?,
+                    objective = ?, assessment_questions = ?, suggested_evidence = ?,
+                    example_gaps = ?, example_recommendations = ?
+                WHERE control_identifier = ?
+                """,
+                (
+                    clause,
+                    title,
+                    desc,
+                    domain,
+                    objective,
+                    questions_json,
+                    evidence_json,
+                    gaps_json,
+                    recs_json,
+                    ident,
+                ),
+            )
+        else:
+            # Insert new control
+            cursor.execute(
+                """
+                INSERT INTO controls (
+                    standard, clause, control_identifier, title, description, domain,
+                    objective, assessment_questions, suggested_evidence,
+                    example_gaps, example_recommendations, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "ISO/IEC 27001:2022",
+                    clause,
+                    ident,
+                    title,
+                    desc,
+                    domain,
+                    objective,
+                    questions_json,
+                    evidence_json,
+                    gaps_json,
+                    recs_json,
+                    now_iso,
+                ),
+            )
+
+
+def initialize_assessment_controls(conn: sqlite3.Connection, assessment_id: int) -> int:
+    """
+    Ensure all 20 catalogue controls exist for a given assessment with 'Not Assessed' status.
+    Repeated calls are idempotent and do NOT overwrite existing observations, owners, or statuses.
+    Returns the number of newly initialized control assessment rows.
+    """
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, control_identifier FROM controls ORDER BY id ASC")
+    all_controls = cursor.fetchall()
+    now_iso = get_utc_now_iso()
+    inserted_count = 0
+
+    for c in all_controls:
+        cid = c["id"]
+        # Check if already present for this assessment
+        cursor.execute(
+            "SELECT id FROM control_assessments WHERE assessment_id = ? AND control_id = ?",
+            (assessment_id, cid),
+        )
+        if not cursor.fetchone():
+            cursor.execute(
+                """
+                INSERT INTO control_assessments (
+                    assessment_id, control_id, status, created_at, updated_at
+                ) VALUES (?, ?, 'Not Assessed', ?, ?)
+                """,
+                (assessment_id, cid, now_iso, now_iso),
+            )
+            inserted_count += 1
+
+    return inserted_count
+
+
+def initialize_missing_controls_for_all_assessments(conn: sqlite3.Connection) -> None:
+    """
+    Safely initialize missing control assessment rows for any existing assessments
+    (such as assessments created during Phase 1) without overwriting existing data.
+    """
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM assessments")
+    assessments = cursor.fetchall()
+    for asm in assessments:
+        initialize_assessment_controls(conn, asm["id"])
+
+
 def init_db(db_path: Optional[str | Path] = None) -> None:
     """
-    Idempotently initialize SQLite database tables, indices, and triggers.
-    Does NOT overwrite or erase existing records if tables already exist.
+    Idempotently initialize SQLite database tables, indices, triggers, migrations,
+    controls catalogue synchronization, and assessment control rows.
+    Does NOT overwrite or erase existing records if tables or data already exist.
     """
     with db_session(db_path) as conn:
         conn.executescript(SCHEMA_SQL)
         conn.executescript(TRIGGERS_SQL)
+        run_migrations(conn)
+        sync_controls_catalogue(conn)
+        initialize_missing_controls_for_all_assessments(conn)

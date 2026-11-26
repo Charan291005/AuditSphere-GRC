@@ -66,7 +66,7 @@ def render_assessments_page():
 def _render_directory_tab():
     """Render the list and management controls of existing assessments."""
     # Filter bar
-    f_col1, f_col2, f_col3 = st.columns([2, 2, 1])
+    f_col1, f_col2, f_col3, f_col4 = st.columns([2.5, 1.8, 1.2, 1.8])
 
     with f_col1:
         search_query = st.text_input(
@@ -82,6 +82,13 @@ def _render_directory_tab():
         )
     with f_col3:
         include_archived = st.checkbox("Show Archived", value=True)
+    with f_col4:
+        if st.button("Load FinCore Demo", use_container_width=True, help="Load the FinCore Technologies demonstration assessment."):
+            from services.control_service import create_fincore_demo_assessment
+            demo = create_fincore_demo_assessment()
+            st.session_state["active_assessment_id"] = demo["assessment"]["id"]
+            st.success("Loaded FinCore demonstration assessment.")
+            st.rerun()
 
     # Fetch data
     db_status = None if status_filter == "All Statuses" else status_filter

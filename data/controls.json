@@ -1,0 +1,559 @@
+{
+  "catalogue_metadata": {
+    "standard": "ISO/IEC 27001:2022",
+    "title": "AuditSphere Educational Selected Annex A Controls Catalogue",
+    "description": "An educational subset of 20 selected Annex A controls representing all four ISO/IEC 27001:2022 themes (Organizational, People, Physical, Technological). Paraphrased for educational and portfolio evaluation purposes.",
+    "total_controls": 20,
+    "theme_distribution": {
+      "Organizational": 6,
+      "People": 4,
+      "Physical": 4,
+      "Technological": 6
+    },
+    "disclaimer": "This catalogue is an educational subset of ISO/IEC 27001:2022 Annex A controls and does not constitute a complete Statement of Applicability or certification audit checklist."
+  },
+  "controls": [
+    {
+      "control_id": 1,
+      "control_identifier": "A.5.1",
+      "clause": "Annex A.5",
+      "title": "Policies for Information Security",
+      "category": "Organizational",
+      "description": "Information security policies and topic-specific policies must be defined, endorsed by executive leadership, published, communicated across the organization, and reviewed periodically or upon significant operational changes.",
+      "objective": "Provide management direction and support for information security in accordance with business requirements and relevant laws.",
+      "assessment_questions": [
+        "Is there an overarching information security policy approved by executive management?",
+        "Are topic-specific policies (e.g., access control, backup, data protection) documented and disseminated?",
+        "Is there an established schedule for regular review and maintenance of security policies?"
+      ],
+      "suggested_evidence": [
+        "Approved Information Security Policy document",
+        "Executive approval sign-off or committee minutes",
+        "Policy review schedule and change log",
+        "Staff acknowledgment records"
+      ],
+      "example_gaps": [
+        "Information security policy has not been reviewed or updated for over 24 months.",
+        "Topic-specific policies lack documented executive leadership approval."
+      ],
+      "example_recommendations": [
+        "Establish an annual policy review cadence approved by the ISMS steering committee.",
+        "Formally document executive sign-off and communicate updated policies to all personnel."
+      ]
+    },
+    {
+      "control_id": 2,
+      "control_identifier": "A.5.15",
+      "clause": "Annex A.5",
+      "title": "Access Control",
+      "category": "Organizational",
+      "description": "Rules to control physical and logical access to information and associated assets must be established, documented, and enforced based on business and security prerequisites.",
+      "objective": "Ensure authorized access and prevent unauthorized access to systems, data, and business networks.",
+      "assessment_questions": [
+        "Does a formalized access control policy exist outlining principles like least privilege and need-to-know?",
+        "Are user access requests subject to formal business justification and owner approval?",
+        "Is remote access governed by stringent access control guidelines?"
+      ],
+      "suggested_evidence": [
+        "Documented Access Control Policy",
+        "Role-Based Access Control (RBAC) matrix",
+        "User access request tickets with owner sign-off"
+      ],
+      "example_gaps": [
+        "Access is granted on verbal request without written system-owner authorization.",
+        "Role-based access matrix is missing or poorly defined for core administrative systems."
+      ],
+      "example_recommendations": [
+        "Institute a ticketing workflow requiring documented owner approval for all access requests.",
+        "Define and publish an enterprise Role-Based Access Control (RBAC) schema."
+      ]
+    },
+    {
+      "control_id": 3,
+      "control_identifier": "A.5.18",
+      "clause": "Annex A.5",
+      "title": "Access Rights Management",
+      "category": "Organizational",
+      "description": "The allocation, modification, and revocation of access rights to information assets must be systematically provisioned, altered, and removed in accordance with access control rules and employment lifecycle events.",
+      "objective": "Ensure access rights remain aligned with current job roles and are promptly revoked upon transfer or separation.",
+      "assessment_questions": [
+        "Are user access reviews conducted at regular intervals (e.g., quarterly or biannually)?",
+        "Is there a verified de-provisioning process that immediately disables accounts upon employee termination?",
+        "Are dormant or orphan accounts routinely identified and disabled?"
+      ],
+      "suggested_evidence": [
+        "Periodic user access review reports and sign-offs",
+        "HR termination notification timestamps matched against directory disablement logs",
+        "Automated de-provisioning workflow configurations"
+      ],
+      "example_gaps": [
+        "Terminated contractor accounts remained active for weeks following contract conclusion.",
+        "Access reviews are not formally tracked or documented with system-owner approvals."
+      ],
+      "example_recommendations": [
+        "Integrate HR offboarding notifications with identity provider (IdP) for immediate account suspension.",
+        "Mandate quarterly access re-certifications across critical production environments."
+      ]
+    },
+    {
+      "control_id": 4,
+      "control_identifier": "A.5.24",
+      "clause": "Annex A.5",
+      "title": "Information Security Incident Management Planning",
+      "category": "Organizational",
+      "description": "The organization must plan and prepare for managing security incidents by defining incident processes, roles, responsibilities, reporting hierarchies, and coordination channels.",
+      "objective": "Ensure effective and timely response to security events and operational incidents.",
+      "assessment_questions": [
+        "Is there a documented incident response plan with clearly designated incident roles and escalations?",
+        "Are communication pathways defined for internal teams, legal advisors, regulators, and affected clients?",
+        "Is the incident response plan tested periodically via tabletop exercises or simulated drills?"
+      ],
+      "suggested_evidence": [
+        "Incident Response Plan (IRP) documentation",
+        "Call tree / contact escalation registry",
+        "Tabletop simulation summary report and action items"
+      ],
+      "example_gaps": [
+        "Incident response plan exists on paper but has never been tested in simulated exercises.",
+        "Escalation contact lists are out of date and contain departed staff members."
+      ],
+      "example_recommendations": [
+        "Schedule and execute an annual tabletop simulation exercise involving technical and executive leads.",
+        "Establish a quarterly cadence to verify and update incident response call rosters."
+      ]
+    },
+    {
+      "control_id": 5,
+      "control_identifier": "A.5.31",
+      "clause": "Annex A.5",
+      "title": "Legal, Statutory, Regulatory and Contractual Requirements",
+      "category": "Organizational",
+      "description": "Legal, statutory, regulatory, and contractual requirements relevant to information security, and the organization's approach to satisfy them, must be explicitly documented, updated, and adhered to.",
+      "objective": "Prevent breaches of legal, regulatory, or contractual obligations related to information security.",
+      "assessment_questions": [
+        "Is a comprehensive legal and compliance register maintained and updated regularly?",
+        "Are contractual cybersecurity and audit commitments tracked for critical client and partner agreements?",
+        "Are data sovereignty and intellectual property obligations systematically monitored?"
+      ],
+      "suggested_evidence": [
+        "Legal and Regulatory Compliance Register",
+        "Customer Data Protection Agreements (DPAs)",
+        "Internal compliance audit reports"
+      ],
+      "example_gaps": [
+        "Compliance register has not incorporated recent regional data privacy regulatory amendments.",
+        "No formal process exists to review security commitments made in customized client contracts."
+      ],
+      "example_recommendations": [
+        "Perform a comprehensive review with legal counsel to update the regulatory obligations register.",
+        "Create a contract review checklist ensuring security clauses align with operational capabilities."
+      ]
+    },
+    {
+      "control_id": 6,
+      "control_identifier": "A.5.34",
+      "clause": "Annex A.5",
+      "title": "Privacy and Protection of Personally Identifiable Information",
+      "category": "Organizational",
+      "description": "The organization must identify and implement technical and organizational controls to protect personally identifiable information (PII) according to relevant privacy laws and regulations.",
+      "objective": "Ensure compliance with data protection laws and safeguard personal data belonging to customers and staff.",
+      "assessment_questions": [
+        "Is PII classified and mapped across data processing workflows and technical repositories?",
+        "Are Data Protection Impact Assessments (DPIAs) conducted before deploying new data processing systems?",
+        "Are data subject access and deletion request procedures implemented and operational?"
+      ],
+      "suggested_evidence": [
+        "Record of Processing Activities (ROPA)",
+        "Completed DPIA assessments",
+        "Data subject rights request workflow documentation",
+        "Privacy Notice"
+      ],
+      "example_gaps": [
+        "No structured Record of Processing Activities (ROPA) exists to track customer PII flows.",
+        "Data retention timelines for customer personal data are neither defined nor automated."
+      ],
+      "example_recommendations": [
+        "Compile and maintain a formal Data Flow and Record of Processing Activities inventory.",
+        "Implement automated data retention and purge routines for expired personal records."
+      ]
+    },
+    {
+      "control_id": 7,
+      "control_identifier": "A.6.1",
+      "clause": "Annex A.6",
+      "title": "Personnel Screening",
+      "category": "People",
+      "description": "Background verification checks on all candidates for employment, contractors, and relevant third-party personnel must be carried out prior to joining in accordance with applicable laws, regulations, and ethics.",
+      "objective": "Verify that all personnel are suitable and trustworthy for their intended roles.",
+      "assessment_questions": [
+        "Are pre-employment background checks mandated for all permanent and contract personnel?",
+        "Are enhanced screening procedures (e.g., criminal history, credit) conducted for high-privilege roles?",
+        "Are screening records stored securely with appropriate privacy protections?"
+      ],
+      "suggested_evidence": [
+        "Pre-employment Screening Policy",
+        "Sample completed background check confirmation files (anonymized)",
+        "Contractor onboarding checklist"
+      ],
+      "example_gaps": [
+        "Background screening is enforced for full-time employees but skipped for third-party contractors.",
+        "High-privilege system administrators are not subjected to enhanced financial or criminal background checks."
+      ],
+      "example_recommendations": [
+        "Standardize background screening requirements across all contractor and vendor staffing agreements.",
+        "Implement risk-based enhanced vetting for personnel granted root or domain-admin privileges."
+      ]
+    },
+    {
+      "control_id": 8,
+      "control_identifier": "A.6.3",
+      "clause": "Annex A.6",
+      "title": "Information Security Awareness, Education and Training",
+      "category": "People",
+      "description": "Personnel and relevant contractors must receive appropriate security awareness education, training, and regular updates relevant to their organizational roles.",
+      "objective": "Ensure personnel understand information security responsibilities and maintain situational awareness.",
+      "assessment_questions": [
+        "Is security awareness training mandatory for all new hires during onboarding?",
+        "Is refresher security training delivered at least annually to all staff?",
+        "Are simulated phishing campaigns executed to measure workforce vigilance?"
+      ],
+      "suggested_evidence": [
+        "Security awareness training curriculum and slides",
+        "LMS completion records demonstrating 95%+ participation",
+        "Simulated phishing exercise metric reports"
+      ],
+      "example_gaps": [
+        "Security awareness training is conducted at orientation but never refreshed annually.",
+        "No remediation training is provided to personnel who fail simulated phishing assessments."
+      ],
+      "example_recommendations": [
+        "Deploy mandatory annual refresher training with automated tracking and managerial escalation.",
+        "Provide immediate micro-learning modules for individuals who click simulated phishing links."
+      ]
+    },
+    {
+      "control_id": 9,
+      "control_identifier": "A.6.6",
+      "clause": "Annex A.6",
+      "title": "Confidentiality or Non-Disclosure Agreements",
+      "category": "People",
+      "description": "Confidentiality or non-disclosure agreements reflecting the organization's requirements for protection of information must be identified, documented, regularly reviewed, and signed by personnel and third parties.",
+      "objective": "Protect proprietary and sensitive information through legally enforceable confidentiality agreements.",
+      "assessment_questions": [
+        "Do all employment agreements incorporate binding confidentiality and IP protection clauses?",
+        "Are NDAs executed with third-party vendors and contractors prior to sharing confidential data?",
+        "Do confidentiality obligations explicitly survive termination of employment or engagement?"
+      ],
+      "suggested_evidence": [
+        "Standard employee confidentiality agreement template",
+        "Sample executed employee NDAs",
+        "Third-party Non-Disclosure Agreement repository"
+      ],
+      "example_gaps": [
+        "Contractor agreements lack explicit clauses stating that confidentiality duties persist post-termination.",
+        "NDAs with prospective business partners are executed inconsistently."
+      ],
+      "example_recommendations": [
+        "Review and update standard employment and contractor templates to ensure post-employment confidentiality clauses.",
+        "Establish a centralized repository and pre-engagement NDA gatekeeper in procurement."
+      ]
+    },
+    {
+      "control_id": 10,
+      "control_identifier": "A.6.8",
+      "clause": "Annex A.6",
+      "title": "Information Security Event Reporting",
+      "category": "People",
+      "description": "The organization must provide a clear mechanism for personnel to report observed or suspected information security events in a timely and frictionless manner.",
+      "objective": "Ensure security events are communicated rapidly to enable timely investigation and containment.",
+      "assessment_questions": [
+        "Is there an easily accessible, well-known channel (e.g., dedicated email, portal button) for reporting security events?",
+        "Are employees trained on what constitutes a reportable security event vs an IT bug?",
+        "Is there a policy protecting whistleblowers or employees reporting incidents in good faith?"
+      ],
+      "suggested_evidence": [
+        "Incident reporting procedure guide",
+        "Intranet incident reporting button / ticketing queue",
+        "Log of employee-reported security observations"
+      ],
+      "example_gaps": [
+        "Employees lack a dedicated incident reporting channel and report security issues via casual chat channels.",
+        "Staff members are hesitant to report accidental data leaks due to fear of punitive reprisals."
+      ],
+      "example_recommendations": [
+        "Publish a prominent 'Report Security Event' link on the corporate portal with clear SLA commitments.",
+        "Adopt a blameless reporting culture policy that encourages rapid disclosure of security incidents."
+      ]
+    },
+    {
+      "control_id": 11,
+      "control_identifier": "A.7.1",
+      "clause": "Annex A.7",
+      "title": "Physical Security Perimeters",
+      "category": "Physical",
+      "description": "Security perimeters must be defined and used to protect areas that contain information and other associated assets, including data centers, server closets, and sensitive corporate offices.",
+      "objective": "Prevent unauthorized physical access, damage, and interference to the organization’s information facilities.",
+      "assessment_questions": [
+        "Are physical security perimeters established around server rooms and sensitive operational areas?",
+        "Are perimeter barriers (doors, walls, gates) structurally sound and resistant to forced entry?",
+        "Are security boundary perimeters clearly designated and segregated from public access areas?"
+      ],
+      "suggested_evidence": [
+        "Facility floor plans showing security perimeters and secure zones",
+        "Physical security risk assessment report",
+        "Access barrier inspection logs"
+      ],
+      "example_gaps": [
+        "Server room partitions stop at the false ceiling level, permitting crawlspace physical bypass.",
+        "Office reception area lacks physical separation from employee work areas and executive suites."
+      ],
+      "example_recommendations": [
+        "Extend physical security slab-to-slab barriers to enclose secure server infrastructure.",
+        "Install access-controlled turnstiles or secured internal doors dividing visitor zones from operations."
+      ]
+    },
+    {
+      "control_id": 12,
+      "control_identifier": "A.7.2",
+      "clause": "Annex A.7",
+      "title": "Physical Entry Controls",
+      "category": "Physical",
+      "description": "Secure areas must be protected by appropriate entry controls to ensure that only authorized personnel are allowed access, with visitors escorted and recorded.",
+      "objective": "Control and record entry to secure areas to prevent unauthorized physical tampering or theft.",
+      "assessment_questions": [
+        "Is electronic badge access enforced at all exterior doors and interior high-security rooms?",
+        "Are visitors required to present government photo ID, sign a visitor log, and wear visitor badges?",
+        "Are visitor access logs audited and retained for an appropriate compliance period?"
+      ],
+      "suggested_evidence": [
+        "Electronic access control system badge swipe logs",
+        "Visitor sign-in register / digital visitor management export",
+        "Visitor badge policy and escort guidelines"
+      ],
+      "example_gaps": [
+        "Tailgating / piggybacking through secure perimeter doors is common during morning rush hours.",
+        "Server room visitor log is kept on an unmonitored paper sheet with missing entries."
+      ],
+      "example_recommendations": [
+        "Deploy anti-tailgating doors or turnstiles coupled with security guard awareness campaigns.",
+        "Transition to a digital visitor management kiosk integrated with automated visitor badge printing."
+      ]
+    },
+    {
+      "control_id": 13,
+      "control_identifier": "A.7.4",
+      "clause": "Annex A.7",
+      "title": "Physical Security Monitoring",
+      "category": "Physical",
+      "description": "Premises must be continuously monitored by surveillance systems, intrusion detection systems, or physical patrols to deter and detect unauthorized physical entry.",
+      "objective": "Detect unauthorized physical intrusion and maintain evidentiary surveillance records.",
+      "assessment_questions": [
+        "Are CCTV cameras positioned at all perimeter entrance and exit points and data center aisles?",
+        "Are surveillance video recordings retained for at least 30 to 90 days in a tamper-resistant format?",
+        "Are motion detectors and intrusion alarm systems configured to alert on-call security personnel?"
+      ],
+      "suggested_evidence": [
+        "CCTV camera layout diagram",
+        "Video recording retention setting screenshot and archive verification",
+        "Intrusion alarm testing logs and alert dispatch records"
+      ],
+      "example_gaps": [
+        "CCTV camera overlooking the primary backup storage rack has been offline for three weeks.",
+        "Surveillance footage is overwritten after only 14 days due to inadequate local storage capacity."
+      ],
+      "example_recommendations": [
+        "Implement automated health monitoring for CCTV recording feeds to generate immediate downtime alerts.",
+        "Expand network storage capacity to guarantee a minimum 90-day video retention period."
+      ]
+    },
+    {
+      "control_id": 14,
+      "control_identifier": "A.7.7",
+      "clause": "Annex A.7",
+      "title": "Clear Desk and Clear Screen",
+      "category": "Physical",
+      "description": "Clear desk rules for papers and removable storage media and clear screen rules for information processing facilities must be defined, communicated, and systematically enforced.",
+      "objective": "Prevent unauthorized viewing, theft, and loss of papers, media, and screen displays.",
+      "assessment_questions": [
+        "Is an automated screen lock enforced across all workstations after a maximum of 5 to 15 minutes of inactivity?",
+        "Are lockable storage cabinets provided to personnel for securing confidential paperwork and keys?",
+        "Are periodic physical spot-checks performed outside business hours to verify clear desk adherence?"
+      ],
+      "suggested_evidence": [
+        "Group Policy / MDM workstation automatic screen lock configuration",
+        "Clear Desk and Clear Screen policy document",
+        "After-hours physical audit sweep logs"
+      ],
+      "example_gaps": [
+        "Workstations in open-plan areas do not have automatic screen timeouts enforced by centralized policy.",
+        "Sensitive customer payroll printouts were found unattended on shared office printers overnight."
+      ],
+      "example_recommendations": [
+        "Enforce a mandatory 10-minute inactivity screen lock via centralized Mobile Device Management (MDM).",
+        "Deploy 'Follow-Me' secure badge-release printing so documents only print when the user is present."
+      ]
+    },
+    {
+      "control_id": 15,
+      "control_identifier": "A.8.2",
+      "clause": "Annex A.8",
+      "title": "Privileged Access Rights",
+      "category": "Technological",
+      "description": "The allocation and use of privileged access rights must be restricted and controlled through a formal authorization process, dedicated accounts, and privileged access management (PAM) principles.",
+      "objective": "Prevent misuse and compromise of elevated administrative rights on critical infrastructure.",
+      "assessment_questions": [
+        "Are administrative privileges separated from daily standard user accounts (no admin browsing or email)?",
+        "Is Multi-Factor Authentication (MFA) strictly enforced on all privileged accounts and bastions?",
+        "Is Privileged Access Management (PAM) or just-in-time privilege elevation implemented?"
+      ],
+      "suggested_evidence": [
+        "Inventory of privileged accounts across domains and cloud tenants",
+        "Privileged Access Management (PAM) session recording and vault policy",
+        "MFA enforcement policy screenshot on administrative portals"
+      ],
+      "example_gaps": [
+        "System administrators use shared root or generic domain-admin accounts for everyday tasks.",
+        "Privileged cloud console access does not require hardware token or phishing-resistant MFA."
+      ],
+      "example_recommendations": [
+        "Mandate individual named administrative accounts and prohibit generic root credentials.",
+        "Implement a PAM solution providing session auditing and Just-In-Time (JIT) privilege elevation."
+      ]
+    },
+    {
+      "control_id": 16,
+      "control_identifier": "A.8.5",
+      "clause": "Annex A.8",
+      "title": "Secure Authentication",
+      "category": "Technological",
+      "description": "Secure authentication technologies and procedures must be implemented based on information access restrictions and the specific risk profile of the application or service.",
+      "objective": "Authenticate users and systems reliably to prevent credential stuffing, brute force, and spoofing.",
+      "assessment_questions": [
+        "Is Multi-Factor Authentication (MFA) enforced for all employees across corporate SaaS and VPN endpoints?",
+        "Are password complexity, length (e.g., 14+ characters), and breach-compromised password screening enforced?",
+        "Are single sign-on (SSO) integrations utilized to centralize authentication governance?"
+      ],
+      "suggested_evidence": [
+        "IdP conditional access policies enforcing MFA for all users",
+        "Password policy configuration report from active directory or identity provider",
+        "SSO federated application inventory"
+      ],
+      "example_gaps": [
+        "Legacy enterprise applications still allow single-factor password-only access from untrusted networks.",
+        "Account lockout after successive failed login attempts is not configured on public web services."
+      ],
+      "example_recommendations": [
+        "Enforce modern adaptive MFA across all corporate web applications and VPN gateways.",
+        "Configure automated lockout thresholds and rate-limiting to mitigate brute force attacks."
+      ]
+    },
+    {
+      "control_id": 17,
+      "control_identifier": "A.8.8",
+      "clause": "Annex A.8",
+      "title": "Management of Technical Vulnerabilities",
+      "category": "Technological",
+      "description": "Information about technical vulnerabilities of information systems in use must be obtained, the organization's exposure evaluated, and appropriate remediation or patching measures taken.",
+      "objective": "Prevent the exploitation of known technical software and firmware vulnerabilities.",
+      "assessment_questions": [
+        "Are automated vulnerability scans executed on external and internal assets at least monthly?",
+        "Is there a defined patching SLA based on Common Vulnerability Scoring System (CVSS) severities?",
+        "Are third-party software dependencies and libraries scanned for known CVEs?"
+      ],
+      "suggested_evidence": [
+        "Vulnerability scanning tool configuration and recent executive summary report",
+        "Vulnerability Remediation Policy showing SLA timelines (e.g., Critical within 14 days)",
+        "Patch management deployment verification reports"
+      ],
+      "example_gaps": [
+        "Critical CVSS 9.0+ vulnerabilities remain unpatched on production servers past established SLA limits.",
+        "No automated tool is used to monitor software dependency vulnerabilities in custom code."
+      ],
+      "example_recommendations": [
+        "Establish an automated vulnerability scanning and patch management cycle with strict SLA enforcement.",
+        "Integrate Software Composition Analysis (SCA) into the CI/CD pipeline to flag vulnerable dependencies."
+      ]
+    },
+    {
+      "control_id": 18,
+      "control_identifier": "A.8.13",
+      "clause": "Annex A.8",
+      "title": "Information Backup",
+      "category": "Technological",
+      "description": "Backup copies of information, software, and system images must be maintained and regularly tested in accordance with the agreed topic-specific policy on backup.",
+      "objective": "Protect against data loss, ransomware, and system corruption through reliable, recoverable backups.",
+      "assessment_questions": [
+        "Are automated backups performed daily for critical databases and file repositories?",
+        "Are backups stored in an isolated, immutable, or off-site location protected against ransomware?",
+        "Are backup restoration procedures tested and documented at least quarterly or annually?"
+      ],
+      "suggested_evidence": [
+        "Backup policy defining RTO and RPO targets",
+        "Automated backup job success dashboards and error alerts",
+        "Formal backup restoration drill report with measured recovery times"
+      ],
+      "example_gaps": [
+        "Backups run automatically, but restoration drills have not been performed in over a year.",
+        "Backup repositories share the same active directory domain, exposing them to ransomware destruction."
+      ],
+      "example_recommendations": [
+        "Institute quarterly backup restoration tests with documented RTO/RPO validation.",
+        "Implement immutable write-once-read-many (WORM) storage or cloud air-gapped backup vaults."
+      ]
+    },
+    {
+      "control_id": 19,
+      "control_identifier": "A.8.15",
+      "clause": "Annex A.8",
+      "title": "Logging",
+      "category": "Technological",
+      "description": "Logs that record activities, exceptions, faults, and other relevant events must be produced, stored, protected from tampering, and regularly analyzed.",
+      "objective": "Record system events to facilitate security investigations, anomaly detection, and operational integrity.",
+      "assessment_questions": [
+        "Are audit logs enabled across operating systems, firewalls, identity providers, and critical databases?",
+        "Are security logs forwarded to a centralized SIEM or log repository in real time?",
+        "Are log repositories secured with append-only access to prevent administrator tampering or deletion?"
+      ],
+      "suggested_evidence": [
+        "Centralized SIEM ingestion architecture and retention settings (e.g., 365 days)",
+        "Audit logging configuration screenshots from cloud consoles and directory services",
+        "Alerting rules configured for suspicious administrative activities"
+      ],
+      "example_gaps": [
+        "Authentication logs are stored only on local server disks with no centralized forwarding.",
+        "System administrators have full permissions to truncate or disable audit logs on servers."
+      ],
+      "example_recommendations": [
+        "Deploy a centralized SIEM to aggregate event logs in real time from all network and cloud assets.",
+        "Restrict log repository access using write-once permissions to safeguard forensic evidence integrity."
+      ]
+    },
+    {
+      "control_id": 20,
+      "control_identifier": "A.8.24",
+      "clause": "Annex A.8",
+      "title": "Use of Cryptography",
+      "category": "Technological",
+      "description": "Rules for the effective use of cryptography, including cryptographic key management, must be defined, approved, and implemented across data in transit and at rest.",
+      "objective": "Ensure proper and effective use of encryption to protect the confidentiality and integrity of information.",
+      "assessment_questions": [
+        "Is encryption enforced for sensitive data in transit using modern TLS (v1.2+ or v1.3)?",
+        "Is encryption at rest enforced across all laptops, databases, and cloud storage volumes?",
+        "Is there a formal key management lifecycle covering generation, rotation, storage, and retirement?"
+      ],
+      "suggested_evidence": [
+        "Cryptographic Standard and Key Management Policy",
+        "TLS configuration cipher suite reports on public endpoints (e.g., Qualys SSL Labs A grade)",
+        "Full-disk encryption (BitLocker / FileVault) compliance reports from endpoint management"
+      ],
+      "example_gaps": [
+        "Internal microservice communications utilize unencrypted plaintext HTTP.",
+        "Cryptographic keys and API secrets are hardcoded in source code repositories."
+      ],
+      "example_recommendations": [
+        "Enforce TLS 1.3 across all external and internal service-to-service communication paths.",
+        "Transition all cryptographic keys and credentials to an automated cloud key vault with periodic rotation."
+      ]
+    }
+  ]
+}

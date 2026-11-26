@@ -376,25 +376,36 @@ def test_cross_assessment_isolation_triggers(temp_db_path: str):
     )
 
     with db_session(temp_db_path) as conn:
-        # Create control
-        conn.execute(
-            """
-            INSERT INTO controls (clause, control_identifier, title, description, domain, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            ("A.5", "A.5.1", "Policies for info security", "Desc", "Organizational", "2026-01-01"),
-        )
-        ctrl_id = conn.execute("SELECT id FROM controls WHERE control_identifier = 'A.5.1'").fetchone()[0]
+        # Get existing control from catalogue or create custom one
+        row = conn.execute("SELECT id FROM controls WHERE control_identifier = 'A.5.1'").fetchone()
+        if row:
+            ctrl_id = row[0]
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO controls (clause, control_identifier, title, description, domain, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                ("A.5", "A.5.1", "Policies for info security", "Desc", "Organizational", "2026-01-01"),
+            )
+            ctrl_id = cursor.lastrowid
 
         # Assessment A control_assessment
-        cursor = conn.execute(
-            """
-            INSERT INTO control_assessments (assessment_id, control_id, status, updated_at)
-            VALUES (?, ?, ?, ?)
-            """,
-            (a1["id"], ctrl_id, "Implemented", "2026-01-01T00:00:00Z"),
-        )
-        ca_id_a1 = cursor.lastrowid
+        ca_row = conn.execute(
+            "SELECT id FROM control_assessments WHERE assessment_id = ? AND control_id = ?",
+            (a1["id"], ctrl_id),
+        ).fetchone()
+        if ca_row:
+            ca_id_a1 = ca_row[0]
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO control_assessments (assessment_id, control_id, status, updated_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (a1["id"], ctrl_id, "Implemented", "2026-01-01T00:00:00Z"),
+            )
+            ca_id_a1 = cursor.lastrowid
 
         # Assessment B evidence
         cursor = conn.execute(

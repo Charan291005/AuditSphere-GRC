@@ -3,12 +3,15 @@ Dashboard aggregation service for AuditSphere.
 
 Computes metrics and high-level telemetry directly from SQLite records.
 Strictly avoids synthetic or fake compliance percentages.
+Provides control assessment coverage, weighted readiness scores,
+gap counts, and domain progress summaries.
 """
 
 from typing import Any, Dict, Optional
 from database import db_session
 from services.activity_service import get_recent_activities
 from services.assessment_service import get_assessment
+from services.assessment_engine import calculate_overall_metrics
 
 
 def get_dashboard_summary(
@@ -17,8 +20,8 @@ def get_dashboard_summary(
 ) -> Dict[str, Any]:
     """
     Calculate live summary statistics directly from database records.
-    Returns counts for total, active, and archived assessments, as well as
-    active assessment metadata and real recent activities.
+    Returns counts for total, active, and archived assessments, active assessment
+    metadata, control assessment metrics, and recent activities.
     """
     with db_session(db_path) as conn:
         cursor = conn.cursor()
@@ -47,8 +50,15 @@ def get_dashboard_summary(
 
     # Resolve active assessment if specified
     active_assessment = None
+    control_metrics = None
+
     if active_assessment_id is not None:
         active_assessment = get_assessment(active_assessment_id, db_path=db_path)
+        if active_assessment:
+            from services.control_service import get_assessment_controls
+
+            controls = get_assessment_controls(active_assessment_id, db_path=db_path)
+            control_metrics = calculate_overall_metrics(controls)
 
     # Recent activity stream
     recent_activities = get_recent_activities(
@@ -61,5 +71,6 @@ def get_dashboard_summary(
         "archived_assessments": archived_assessments,
         "status_distribution": status_counts,
         "active_assessment": active_assessment,
+        "control_metrics": control_metrics,
         "recent_activities": recent_activities,
     }

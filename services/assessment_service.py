@@ -7,7 +7,7 @@ ISMS audit assessments.
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from database import db_session, get_utc_now_iso
+from database import db_session, get_utc_now_iso, initialize_assessment_controls
 from services.activity_service import log_activity
 
 VALID_STATUSES = ("Draft", "In Progress", "In Review", "Completed", "Archived")
@@ -103,6 +103,8 @@ def create_assessment(
             ),
         )
         assessment_id = cursor.lastrowid
+        # Initialize all 20 catalogue controls for this assessment with 'Not Assessed' status
+        initialize_assessment_controls(conn, assessment_id)
 
     # Record activity log
     log_activity(

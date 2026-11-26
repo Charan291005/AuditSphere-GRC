@@ -1,10 +1,14 @@
 """
 Activity logging service for AuditSphere.
 
-Records important assessment lifecycle events:
+Records important assessment lifecycle and control assessment events:
 - ASSESSMENT_CREATED
 - ASSESSMENT_EDITED
 - ASSESSMENT_ARCHIVED
+- CONTROL_ASSESSMENT_INITIALIZED
+- CONTROL_ASSESSMENT_UPDATED
+- CONTROL_STATUS_CHANGED
+- CONTROL_APPLICABILITY_CHANGED
 
 Note: This is an internal operational audit log, not a cryptographically
 tamper-proof ledger.
@@ -19,18 +23,33 @@ def log_activity(
     event_type: str,
     description: str,
     actor: str = "Lead Assessor",
+    control_reference: Optional[str] = None,
+    previous_status: Optional[str] = None,
+    new_status: Optional[str] = None,
     db_path: Optional[str] = None,
 ) -> int:
-    """Record a lifecycle event in the activity_log table."""
+    """Record a lifecycle or control assessment event in the activity_log table."""
     now_iso = get_utc_now_iso()
     with db_session(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT INTO activity_log (assessment_id, event_type, description, actor, timestamp)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO activity_log (
+                assessment_id, event_type, description, actor,
+                control_reference, previous_status, new_status, timestamp
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (assessment_id, event_type, description, actor, now_iso),
+            (
+                assessment_id,
+                event_type,
+                description,
+                actor,
+                control_reference,
+                previous_status,
+                new_status,
+                now_iso,
+            ),
         )
         return cursor.lastrowid  # type: ignore
 
@@ -46,7 +65,8 @@ def get_recent_activities(
         if assessment_id is not None:
             cursor.execute(
                 """
-                SELECT a.id, a.assessment_id, a.event_type, a.description, a.actor, a.timestamp,
+                SELECT a.id, a.assessment_id, a.event_type, a.description, a.actor,
+                       a.control_reference, a.previous_status, a.new_status, a.timestamp,
                        asm.title AS assessment_title
                 FROM activity_log a
                 LEFT JOIN assessments asm ON a.assessment_id = asm.id
@@ -59,7 +79,8 @@ def get_recent_activities(
         else:
             cursor.execute(
                 """
-                SELECT a.id, a.assessment_id, a.event_type, a.description, a.actor, a.timestamp,
+                SELECT a.id, a.assessment_id, a.event_type, a.description, a.actor,
+                       a.control_reference, a.previous_status, a.new_status, a.timestamp,
                        asm.title AS assessment_title
                 FROM activity_log a
                 LEFT JOIN assessments asm ON a.assessment_id = asm.id

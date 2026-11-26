@@ -2,7 +2,7 @@
 
 ## 1. System Overview
 
-AuditSphere is a portfolio-grade Governance, Risk and Compliance (GRC) platform engineered to simulate an ISO/IEC 27001:2022 assessment lifecycle. The system provides structured assessment workspace management, evidence traceability, gap analysis, qualitative risk registers, and remediation workflows.
+AuditSphere is a portfolio-grade Governance, Risk and Compliance (GRC) platform engineered to simulate an **ISO/IEC 27001:2022** assessment lifecycle. The system provides structured assessment workspace management, Annex A security control evaluation, evidence traceability, gap analysis, qualitative risk registers, and remediation workflows.
 
 ```
 +-------------------------------------------------------------+
@@ -13,7 +13,8 @@ AuditSphere is a portfolio-grade Governance, Risk and Compliance (GRC) platform 
                               v
 +-------------------------------------------------------------+
 |                       Service Layer                         |
-|  (AssessmentService, DashboardService, ActivityService)     |
+|   (AssessmentService, ControlService, AssessmentEngine,     |
+|             DashboardService, ActivityService)              |
 +-------------------------------------------------------------+
                               |
                               v
@@ -37,11 +38,19 @@ AuditSphere is a portfolio-grade Governance, Risk and Compliance (GRC) platform 
 2. **Defensive Data Integrity**:
    - Parameterized SQL execution exclusively (`?` placeholders) to eliminate SQL injection vulnerabilities.
    - Enforced SQLite foreign keys (`PRAGMA foreign_keys = ON;`) on every connection.
-   - Write-Ahead Logging (`PRAGMA journal_mode = WAL;`) for concurrent read access.
+   - Write-Ahead Logging (`PRAGMA journal_mode = WAL;`) for high concurrency.
    - Cross-assessment relational isolation enforced via database triggers to prevent linking artifacts across distinct assessment boundaries.
-3. **Auditability & Traceability**: System activity logs recorded on assessment creation, modification, and archival.
-4. **Authentic GRC Metrics**: No simulated, random, or hardcoded compliance percentages; every dashboard metric reflects actual database records.
-5. **Portability**: Uses exclusively free and open-source standard libraries without external cloud dependencies or paid APIs.
+   - Archived assessments are strictly protected against modification.
+3. **Authentic GRC Metrics & Scoring Engine**:
+   - Deterministic calculations implemented via pure functions in `services/assessment_engine.py`.
+   - Coverage: $\frac{\text{Assessed Applicable}}{\text{Total Applicable}} \times 100$.
+   - Weighted Readiness: $\frac{\text{Implemented} + 0.5 \times \text{Partially Implemented}}{\text{Assessed Applicable}} \times 100$.
+   - Zero hardcoded or simulated percentages; unassessed assessments display `N/A`.
+4. **Idempotency & Repeat-Safe Operations**:
+   - Schema creation and column migrations run repeat-safely.
+   - Control catalogue (`data/controls.json`) synchronizes without overwriting custom observations.
+   - Fictional demonstration dataset (FinCore Technologies) can be generated repeatedly without duplicate assessment pollution.
+5. **Portability**: Uses exclusively free and open-source libraries (Python, Streamlit, SQLite, Pandas, Plotly, Pytest).
 
 ---
 
@@ -89,7 +98,11 @@ erDiagram
         string title
         string description
         string domain
-        string guidance
+        string objective
+        string assessment_questions
+        string suggested_evidence
+        string example_gaps
+        string example_recommendations
         string created_at
     }
 
@@ -98,12 +111,15 @@ erDiagram
         int assessment_id FK
         int control_id FK
         string status
-        int effectiveness_score
-        int maturity_level
-        string finding_summary
-        string notes
+        string control_owner
+        string assessment_observation
+        string testing_notes
+        string evidence_notes
+        string recommendation
+        string applicability_justification
         string assessed_by
         string assessed_at
+        string created_at
         string updated_at
     }
 
@@ -195,6 +211,9 @@ erDiagram
         string event_type
         string description
         string actor
+        string control_reference
+        string previous_status
+        string new_status
         string timestamp
     }
 ```
@@ -212,9 +231,20 @@ To prevent evidence, findings, and risks from one assessment accidentally becomi
 
 ---
 
-## 5. Session State & Context Architecture
+## 5. Control Evaluation State Machine
 
-The Streamlit front-end maintains the active assessment context through `st.session_state`:
-- `st.session_state["active_assessment_id"]`: Stores the selected assessment ID.
-- The sidebar selector provides persistent switching across any page.
-- When no assessment exists, the dashboard cleanly displays empty states and prompts assessment creation.
+```
+   +---------------------+
+   |    Not Assessed     | (Initial state)
+   +----------+----------+
+              |
+              +-------------------+--------------------+
+              |                   |                    |
+              v                   v                    v
+     +-----------------+  +-----------------+  +----------------+
+     |   Implemented   |  |   Partially     |  | Not Applicable |
+     | (Observation    |  |  Implemented    |  | (Justification |
+     |  Required)      |  | & Not Implem.   |  |  Required)     |
+     +-----------------+  | (Obs + Rec Req) |  +----------------+
+                          +-----------------+
+```
