@@ -27,7 +27,7 @@ AuditSphere solves this by providing a unified assessment workspace with structu
 - **Database Engine:** SQLite (WAL Mode, Parameterized Queries, Foreign Keys Enforced)
 - **Data & Visualizations:** Pandas, Plotly
 - **Document Generation:** ReportLab
-- **Testing:** Pytest (43 automated tests)
+- **Testing:** Pytest (61 automated tests)
 - **VCS:** Git
 
 No external LLM APIs, paid services, microservices, or complex container dependencies are required.
@@ -95,6 +95,32 @@ No external LLM APIs, paid services, microservices, or complex container depende
   - Pre-seeded with 5 original evidence artifacts, 1 failed operating effectiveness test (`TST-001` on `A.8.5`), and 1 confirmed High-severity finding (`FND-001` on `A.8.5`).
   - Completely repeat-safe / idempotent generation.
 
+### Phase 4: Risk Register, Scoring Engine & Interactive Heatmap
+- **Risk Register Workspace (`pages/risk_page.py`, `services/risk_service.py`):**
+  - Comprehensive risk directory with real-time text search, category filters, severity filters, and treatment status filters.
+  - Multi-tab architecture: Directory, 5×5 Plotly Heatmap, 5-Section Risk Entry/Edit Form, and Working Paper Detail View.
+  - CSV export with formula injection defense (CWE-1236) neutralizing spreadsheet formula prefixes.
+- **Three-Tier Qualitative Risk Evaluation Engine (`services/risk_engine.py`):**
+  - **Inherent Risk:** Pre-control baseline exposure ($1 \le L \le 5$, $1 \le I \le 5$).
+  - **Current Residual Risk:** Active post-control operational posture.
+  - **Target Residual Risk:** Desired post-treatment goal. (Strictly preserved as an aspirational target that never overwrites active current residual scores).
+  - Explicit handling for unassessed risks (`Score = None`, `Severity = "Not Assessed"`), strictly avoiding misleading `0` values.
+  - Severity thresholds: Critical (20–25, `#751C35`), High (12–19, `#D9534F`), Medium (6–11, `#F0AD4E`), Low (1–5, `#5CB85C`).
+- **Traceability & Relational Links:**
+  - Direct many-to-many linkages from risks to confirmed audit findings (`risk_findings`), Annex A controls (`risk_controls`), and verified evidence files (`risk_evidence`).
+  - Cross-assessment isolation enforced via compiled SQLite database triggers preventing cross-boundary references.
+  - One-click risk creation from Gap Analysis findings pre-populating title, threat, consequence, and recommended treatment.
+- **Governance Controls & Review Ledger:**
+  - Enforced Risk Acceptance gate requiring documented justification and approval status `Approved`.
+  - Enforced Risk Closure gate requiring documented closure rationale.
+  - Automated reassessment tracking logging historical score adjustments to `risk_reviews`.
+  - Overdue review tracking based on residual severity cadences (Monthly, Quarterly, Semi-Annually, Annually).
+- **Interactive 5×5 Plotly Heatmap:**
+  - Visual matrix with dynamic tier toggle (Inherent, Current Residual, Target Residual).
+  - Interactive cell inspection displaying matching risk records with their current treatment strategies.
+- **FinCore Technologies Phase 4 Risk Expansion:**
+  - 5 realistic demonstration risks seeded with diverse severity: Critical (`RSK-001`), High (`RSK-002`, `RSK-003`), Medium (`RSK-004`), Low (`RSK-005`).
+
 ---
 
 ## 4. Demonstration Dataset Instructions
@@ -102,10 +128,10 @@ No external LLM APIs, paid services, microservices, or complex container depende
 To explore AuditSphere with a pre-populated, realistic simulated assessment:
 
 1. Launch the application: `streamlit run app.py`
-2. Navigate to **Overview Dashboard**, **ISO 27001 Control Assessment**, **Evidence Management**, or **Gap Analysis & Findings**.
+2. Navigate to **Overview Dashboard**, **ISO 27001 Control Assessment**, **Evidence Management**, **Gap Analysis & Findings**, or **Risk Register**.
 3. Click the **"Load Demo Data (FinCore)"** button if not already loaded.
 4. The system will load the fictional assessment for **FinCore Technologies** ($ID\ \#2$).
-5. Inspect the 12 evaluated controls, 5 evidence files with SHA-256 verification, failed control test `TST-001`, and corroborated finding `FND-001`.
+5. Inspect the 12 evaluated controls, 5 evidence files with SHA-256 verification, failed control test `TST-001`, corroborated finding `FND-001`, and 5 classified risks with active residual heatmap distribution.
 
 ---
 

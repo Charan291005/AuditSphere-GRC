@@ -326,6 +326,63 @@ def render_overview_page():
 
         st.markdown("<hr/>", unsafe_allow_html=True)
 
+    # PHASE 4: RISK MANAGEMENT & RESIDUAL EXPOSURE TELEMETRY
+    rsk_metrics = summary.get("risk_metrics")
+    if active and rsk_metrics and rsk_metrics["total_risks"] > 0:
+        st.markdown(
+            '<div class="grc-card-title">Information Security Risk Posture (Residual Exposure)</div>',
+            unsafe_allow_html=True,
+        )
+
+        p4_c1, p4_c2, p4_c3, p4_c4, p4_c5, p4_c6 = st.columns(6)
+        with p4_c1:
+            render_kpi_card(
+                label="Total Risks",
+                value=f"{rsk_metrics['total_risks']}",
+                description="Identified risk scenarios",
+            )
+        with p4_c2:
+            render_kpi_card(
+                label="Critical Residual",
+                value=f"{rsk_metrics['critical_risks']}",
+                description="Score 20-25 (Urgent)",
+            )
+        with p4_c3:
+            render_kpi_card(
+                label="High Residual",
+                value=f"{rsk_metrics['high_risks']}",
+                description="Score 12-19 (Elevated)",
+            )
+        with p4_c4:
+            render_kpi_card(
+                label="Medium / Low",
+                value=f"{rsk_metrics['medium_risks'] + rsk_metrics['low_risks']}",
+                description="Managed exposure",
+            )
+        with p4_c5:
+            render_kpi_card(
+                label="Accepted Risks",
+                value=f"{rsk_metrics['accepted_risks']}",
+                description="Approved decisions",
+            )
+        with p4_c6:
+            render_kpi_card(
+                label="Overdue Reviews",
+                value=f"{rsk_metrics['overdue_reviews']}",
+                description="Review date expired" if rsk_metrics['overdue_reviews'] > 0 else "All reviews current",
+            )
+
+        st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+        rf1, rf2 = st.columns([1, 1])
+
+        with rf1:
+            _render_risk_severity_bar(rsk_metrics)
+
+        with rf2:
+            _render_treatment_donut_chart(rsk_metrics["treatment_counts"])
+
+        st.markdown("<hr/>", unsafe_allow_html=True)
+
     # Activity Stream Row
     st.markdown(
         '<div class="grc-card-title">Recent Assessment Activity</div>',
@@ -366,7 +423,7 @@ def render_overview_page():
     st.markdown(
         """
         <div style="margin-top: 1.5rem; padding: 0.85rem 1rem; background-color: #FFFFFF; border: 1px dashed #D1D5DB; border-radius: 4px; font-size: 0.825rem; color: #6B7280;">
-            <strong>Phase 4 Scope Notice:</strong> Quantitative risk registers, threat modelling, and remediation CAP tracking workflows will be activated in Phase 4. All Phase 1, 2, and 3 workflows (Assessment Management, Control Assessment, Evidence Repository, Control Testing, and Gap Analysis/Findings) are fully operational. In compliance with strict GRC integrity standards, no artificial or mock percentages are displayed.
+            <strong>Phase 5 Scope Notice:</strong> Corrective and Preventive Actions (CAPA) tracking, remediation milestone SLA management, and automated verification workflows will be activated in Phase 5. All Phase 1 through 4 workflows (Assessment Management, Control Assessment, Evidence Repository, Control Testing, Gap Analysis/Findings, and Risk Register) are fully operational. In compliance with strict GRC integrity standards, no artificial or mock percentages are displayed.
         </div>
         """,
         unsafe_allow_html=True,
@@ -560,6 +617,82 @@ def _render_evidence_status_chart(review_counts: Dict[str, int]):
                 values=vals,
                 hole=0.48,
                 marker=dict(colors=[colors[s] for s in statuses], line=dict(color="#FFFFFF", width=1.5)),
+                textinfo="value+percent",
+                hoverinfo="label+value+percent",
+                sort=False,
+            )
+        ]
+    )
+    fig.update_layout(
+        margin=dict(t=10, b=10, l=10, r=10),
+        height=240,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=10)),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_risk_severity_bar(rsk_metrics: Dict[str, Any]):
+    """Render horizontal bar chart for current residual risk distribution."""
+    st.markdown("**Current Residual Risk Distribution**")
+    levels = ["Critical", "High", "Medium", "Low", "Unassessed"]
+    counts = [
+        rsk_metrics["critical_risks"],
+        rsk_metrics["high_risks"],
+        rsk_metrics["medium_risks"],
+        rsk_metrics["low_risks"],
+        rsk_metrics["unassessed_risks"],
+    ]
+    colors = ["#DC2626", "#EA580C", "#D97706", "#15803D", "#6B7280"]
+
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=counts,
+                y=levels,
+                orientation="h",
+                marker=dict(color=colors),
+                text=[str(c) if c > 0 else "" for c in counts],
+                textposition="auto",
+            )
+        ]
+    )
+    fig.update_layout(
+        margin=dict(t=10, b=10, l=10, r=10),
+        height=240,
+        xaxis=dict(title="Number of Risks", dtick=1),
+        yaxis=dict(autorange="reversed"),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_treatment_donut_chart(treatment_counts: Dict[str, int]):
+    """Render donut chart for risk treatment strategies."""
+    st.markdown("**Risk Treatment Strategies**")
+    strategies = ["Mitigate", "Accept", "Transfer", "Avoid"]
+    colors = {
+        "Mitigate": "#751C35",
+        "Accept": "#15803D",
+        "Transfer": "#2563EB",
+        "Avoid": "#D97706",
+    }
+    vals = [treatment_counts.get(s, 0) for s in strategies]
+
+    if sum(vals) == 0:
+        st.info("No treatment strategies recorded.")
+        return
+
+    fig = go.Figure(
+        data=[
+            go.Pie(
+                labels=strategies,
+                values=vals,
+                hole=0.48,
+                marker=dict(colors=[colors[s] for s in strategies], line=dict(color="#FFFFFF", width=1.5)),
                 textinfo="value+percent",
                 hoverinfo="label+value+percent",
                 sort=False,

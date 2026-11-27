@@ -230,20 +230,102 @@ CREATE TABLE IF NOT EXISTS risks (
     title TEXT NOT NULL,
     description TEXT,
     asset_threat_vulnerability TEXT,
-    likelihood INTEGER NOT NULL CHECK(likelihood BETWEEN 1 AND 5),
-    impact INTEGER NOT NULL CHECK(impact BETWEEN 1 AND 5),
-    inherent_risk_score INTEGER NOT NULL, -- likelihood * impact
-    inherent_risk_level TEXT NOT NULL CHECK(inherent_risk_level IN ('Low', 'Medium', 'High', 'Critical')),
+    asset_or_process TEXT,
+    threat TEXT,
+    vulnerability TEXT,
+    consequence TEXT,
+    risk_category TEXT NOT NULL DEFAULT 'Other',
+    existing_controls TEXT,
+    risk_owner TEXT,
+    responsible_department TEXT,
+    likelihood INTEGER CHECK(likelihood IS NULL OR (likelihood BETWEEN 1 AND 5)),
+    impact INTEGER CHECK(impact IS NULL OR (impact BETWEEN 1 AND 5)),
+    inherent_likelihood INTEGER CHECK(inherent_likelihood IS NULL OR (inherent_likelihood BETWEEN 1 AND 5)),
+    inherent_impact INTEGER CHECK(inherent_impact IS NULL OR (inherent_impact BETWEEN 1 AND 5)),
+    inherent_risk_score INTEGER,
+    inherent_risk_level TEXT CHECK(inherent_risk_level IS NULL OR (inherent_risk_level IN ('Low', 'Medium', 'High', 'Critical'))),
+    inherent_rationale TEXT,
     treatment_strategy TEXT NOT NULL CHECK(treatment_strategy IN ('Mitigate', 'Transfer', 'Avoid', 'Accept')) DEFAULT 'Mitigate',
+    treatment_justification TEXT,
+    proposed_treatment TEXT,
+    treatment_owner TEXT,
+    target_treatment_date TEXT,
     residual_likelihood INTEGER CHECK(residual_likelihood IS NULL OR (residual_likelihood BETWEEN 1 AND 5)),
     residual_impact INTEGER CHECK(residual_impact IS NULL OR (residual_impact BETWEEN 1 AND 5)),
     residual_risk_score INTEGER,
     residual_risk_level TEXT CHECK(residual_risk_level IS NULL OR (residual_risk_level IN ('Low', 'Medium', 'High', 'Critical'))),
-    risk_owner TEXT,
-    status TEXT NOT NULL CHECK(status IN ('Identified', 'Evaluated', 'Treatment Planned', 'Monitoring', 'Closed')) DEFAULT 'Identified',
+    residual_rationale TEXT,
+    target_likelihood INTEGER CHECK(target_likelihood IS NULL OR (target_likelihood BETWEEN 1 AND 5)),
+    target_impact INTEGER CHECK(target_impact IS NULL OR (target_impact BETWEEN 1 AND 5)),
+    target_risk_score INTEGER,
+    target_risk_level TEXT CHECK(target_risk_level IS NULL OR (target_risk_level IN ('Low', 'Medium', 'High', 'Critical'))),
+    target_rationale TEXT,
+    acceptance_justification TEXT,
+    approving_authority TEXT,
+    approval_status TEXT NOT NULL CHECK(approval_status IN ('Not Requested', 'Pending Approval', 'Approved', 'Rejected')) DEFAULT 'Not Requested',
+    approval_date TEXT,
+    review_date TEXT,
+    status TEXT NOT NULL CHECK(status IN ('Identified', 'Under Assessment', 'Open', 'Treatment Planned', 'Under Treatment', 'Under Review', 'Accepted', 'Closed')) DEFAULT 'Identified',
+    closure_rationale TEXT,
+    assessor_name TEXT NOT NULL DEFAULT 'Lead Assessor',
+    assessment_date TEXT,
+    is_archived INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     UNIQUE(assessment_id, risk_identifier)
+);
+
+-- 8a. Risk-to-Finding Mappings (Many-to-Many)
+CREATE TABLE IF NOT EXISTS risk_findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    risk_id INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE,
+    finding_id INTEGER NOT NULL REFERENCES findings(id) ON DELETE CASCADE,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(risk_id, finding_id)
+);
+
+-- 8b. Risk-to-Control Mappings (Many-to-Many)
+CREATE TABLE IF NOT EXISTS risk_controls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    risk_id INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE,
+    control_assessment_id INTEGER NOT NULL REFERENCES control_assessments(id) ON DELETE CASCADE,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(risk_id, control_assessment_id)
+);
+
+-- 8c. Risk-to-Evidence Mappings (Many-to-Many)
+CREATE TABLE IF NOT EXISTS risk_evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    risk_id INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE,
+    evidence_id INTEGER NOT NULL REFERENCES evidence(id) ON DELETE CASCADE,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(risk_id, evidence_id)
+);
+
+-- 8d. Risk Review & Reassessment History
+CREATE TABLE IF NOT EXISTS risk_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    risk_id INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE,
+    previous_likelihood INTEGER,
+    previous_impact INTEGER,
+    previous_score INTEGER,
+    previous_level TEXT,
+    new_likelihood INTEGER,
+    new_impact INTEGER,
+    new_score INTEGER,
+    new_level TEXT,
+    evaluation_type TEXT NOT NULL DEFAULT 'Current Residual',
+    reason_for_change TEXT NOT NULL,
+    supporting_evidence_references TEXT,
+    reviewer_name TEXT NOT NULL,
+    review_timestamp TEXT NOT NULL
 );
 
 -- 9. Remediation Tracker
@@ -293,6 +375,20 @@ CREATE INDEX IF NOT EXISTS idx_findings_aid ON findings(assessment_id);
 CREATE INDEX IF NOT EXISTS idx_findings_caid ON findings(control_assessment_id);
 CREATE INDEX IF NOT EXISTS idx_findings_status ON findings(status);
 CREATE INDEX IF NOT EXISTS idx_risks_aid ON risks(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_risks_status ON risks(status);
+CREATE INDEX IF NOT EXISTS idx_risks_cat ON risks(risk_category);
+CREATE INDEX IF NOT EXISTS idx_risks_cur_score ON risks(residual_risk_score);
+CREATE INDEX IF NOT EXISTS idx_risk_findings_aid ON risk_findings(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_risk_findings_rid ON risk_findings(risk_id);
+CREATE INDEX IF NOT EXISTS idx_risk_findings_fid ON risk_findings(finding_id);
+CREATE INDEX IF NOT EXISTS idx_risk_controls_aid ON risk_controls(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_risk_controls_rid ON risk_controls(risk_id);
+CREATE INDEX IF NOT EXISTS idx_risk_controls_caid ON risk_controls(control_assessment_id);
+CREATE INDEX IF NOT EXISTS idx_risk_evidence_aid ON risk_evidence(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_risk_evidence_rid ON risk_evidence(risk_id);
+CREATE INDEX IF NOT EXISTS idx_risk_evidence_eid ON risk_evidence(evidence_id);
+CREATE INDEX IF NOT EXISTS idx_risk_reviews_aid ON risk_reviews(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_risk_reviews_rid ON risk_reviews(risk_id);
 CREATE INDEX IF NOT EXISTS idx_remediation_aid ON remediation(assessment_id);
 CREATE INDEX IF NOT EXISTS idx_activity_aid ON activity_log(assessment_id);
 CREATE INDEX IF NOT EXISTS idx_activity_time ON activity_log(timestamp DESC);
@@ -406,6 +502,94 @@ BEGIN
         THEN RAISE(ABORT, 'Cross-assessment violation: risk does not belong to remediation assessment')
     END;
 END;
+
+-- Phase 4: Prevent linking risks to findings from different assessments in risk_findings
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_risk_finding_insert
+BEFORE INSERT ON risk_findings
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM risks WHERE id = NEW.risk_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: risk does not belong to specified assessment')
+        WHEN (SELECT assessment_id FROM findings WHERE id = NEW.finding_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: finding does not belong to specified assessment')
+    END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_risk_finding_update
+BEFORE UPDATE ON risk_findings
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM risks WHERE id = NEW.risk_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: risk does not belong to specified assessment')
+        WHEN (SELECT assessment_id FROM findings WHERE id = NEW.finding_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: finding does not belong to specified assessment')
+    END;
+END;
+
+-- Prevent linking risks to control assessments from different assessments in risk_controls
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_risk_control_insert
+BEFORE INSERT ON risk_controls
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM risks WHERE id = NEW.risk_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: risk does not belong to specified assessment')
+        WHEN (SELECT assessment_id FROM control_assessments WHERE id = NEW.control_assessment_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: control assessment does not belong to specified assessment')
+    END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_risk_control_update
+BEFORE UPDATE ON risk_controls
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM risks WHERE id = NEW.risk_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: risk does not belong to specified assessment')
+        WHEN (SELECT assessment_id FROM control_assessments WHERE id = NEW.control_assessment_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: control assessment does not belong to specified assessment')
+    END;
+END;
+
+-- Prevent linking risks to evidence from different assessments in risk_evidence
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_risk_evidence_insert
+BEFORE INSERT ON risk_evidence
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM risks WHERE id = NEW.risk_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: risk does not belong to specified assessment')
+        WHEN (SELECT assessment_id FROM evidence WHERE id = NEW.evidence_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: evidence does not belong to specified assessment')
+    END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_risk_evidence_update
+BEFORE UPDATE ON risk_evidence
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM risks WHERE id = NEW.risk_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: risk does not belong to specified assessment')
+        WHEN (SELECT assessment_id FROM evidence WHERE id = NEW.evidence_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: evidence does not belong to specified assessment')
+    END;
+END;
+
+-- Prevent recording risk review for a risk belonging to a different assessment
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_risk_review_insert
+BEFORE INSERT ON risk_reviews
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM risks WHERE id = NEW.risk_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: risk does not belong to review assessment')
+    END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_risk_review_update
+BEFORE UPDATE ON risk_reviews
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM risks WHERE id = NEW.risk_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: risk does not belong to review assessment')
+    END;
+END;
 """
 
 
@@ -504,6 +688,107 @@ def run_migrations(conn: sqlite3.Connection) -> None:
     for col_name, col_type in columns_to_add_act.items():
         if col_name not in act_cols:
             cursor.execute(f"ALTER TABLE activity_log ADD COLUMN {col_name} {col_type};")
+
+    # 6. Migrate 'risks' table (Phase 4)
+    cursor.execute("PRAGMA table_info(risks);")
+    risk_cols = {row["name"] for row in cursor.fetchall()}
+    columns_to_add_risk = {
+        "asset_or_process": "TEXT",
+        "threat": "TEXT",
+        "vulnerability": "TEXT",
+        "consequence": "TEXT",
+        "risk_category": "TEXT NOT NULL DEFAULT 'Other'",
+        "existing_controls": "TEXT",
+        "responsible_department": "TEXT",
+        "inherent_likelihood": "INTEGER",
+        "inherent_impact": "INTEGER",
+        "inherent_rationale": "TEXT",
+        "residual_rationale": "TEXT",
+        "target_likelihood": "INTEGER",
+        "target_impact": "INTEGER",
+        "target_risk_score": "INTEGER",
+        "target_risk_level": "TEXT",
+        "target_rationale": "TEXT",
+        "treatment_justification": "TEXT",
+        "proposed_treatment": "TEXT",
+        "treatment_owner": "TEXT",
+        "target_treatment_date": "TEXT",
+        "acceptance_justification": "TEXT",
+        "approving_authority": "TEXT",
+        "approval_status": "TEXT NOT NULL DEFAULT 'Not Requested'",
+        "approval_date": "TEXT",
+        "review_date": "TEXT",
+        "closure_rationale": "TEXT",
+        "assessor_name": "TEXT NOT NULL DEFAULT 'Lead Assessor'",
+        "assessment_date": "TEXT",
+        "is_archived": "INTEGER NOT NULL DEFAULT 0",
+    }
+    for col_name, col_type in columns_to_add_risk.items():
+        if col_name not in risk_cols:
+            cursor.execute(f"ALTER TABLE risks ADD COLUMN {col_name} {col_type};")
+
+    # Ensure Phase 4 relationship tables exist
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS risk_findings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+            risk_id INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE,
+            finding_id INTEGER NOT NULL REFERENCES findings(id) ON DELETE CASCADE,
+            notes TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(risk_id, finding_id)
+        );
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS risk_controls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+            risk_id INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE,
+            control_assessment_id INTEGER NOT NULL REFERENCES control_assessments(id) ON DELETE CASCADE,
+            notes TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(risk_id, control_assessment_id)
+        );
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS risk_evidence (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+            risk_id INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE,
+            evidence_id INTEGER NOT NULL REFERENCES evidence(id) ON DELETE CASCADE,
+            notes TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(risk_id, evidence_id)
+        );
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS risk_reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+            risk_id INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE,
+            previous_likelihood INTEGER,
+            previous_impact INTEGER,
+            previous_score INTEGER,
+            previous_level TEXT,
+            new_likelihood INTEGER,
+            new_impact INTEGER,
+            new_score INTEGER,
+            new_level TEXT,
+            evaluation_type TEXT NOT NULL DEFAULT 'Current Residual',
+            reason_for_change TEXT NOT NULL,
+            supporting_evidence_references TEXT,
+            reviewer_name TEXT NOT NULL,
+            review_timestamp TEXT NOT NULL
+        );
+        """
+    )
 
 
 def sync_controls_catalogue(conn: sqlite3.Connection, catalogue_path: Optional[Path] = None) -> None:

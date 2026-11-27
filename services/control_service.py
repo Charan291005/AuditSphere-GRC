@@ -501,6 +501,9 @@ def create_fincore_demo_assessment(db_path: Optional[str] = None) -> Dict[str, A
     # Seed Phase 3 Evidence, Testing, and Findings records
     seed_fincore_phase3_artifacts(asm_id, db_path=db_path)
 
+    # Seed Phase 4 Risk records
+    seed_fincore_phase4_risks(asm_id, db_path=db_path)
+
     # Verify metrics for demonstration dataset
     controls = get_assessment_controls(asm_id, db_path=db_path)
     metrics = calculate_overall_metrics(controls)
@@ -737,3 +740,220 @@ def seed_fincore_phase3_artifacts(asm_id: int, db_path: Optional[str] = None) ->
             assessor_name="Marcus Vance, Lead Auditor ISO 27001",
             db_path=db_path,
         )
+
+
+def seed_fincore_phase4_risks(asm_id: int, db_path: Optional[str] = None) -> None:
+    """
+    Seed 5 fictional risk records for FinCore Technologies demonstration assessment.
+    Repeat-safe / idempotent.
+    Distribution: Critical: 1, High: 2, Medium: 1, Low: 1. Total: 5.
+    """
+    from services.risk_service import create_risk
+
+    with db_session(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM risks WHERE assessment_id = ?", (asm_id,))
+        if cursor.fetchone()[0] > 0:
+            return  # Already seeded
+
+        # Fetch control assessments map
+        cursor.execute(
+            """
+            SELECT ca.id, c.control_identifier
+            FROM control_assessments ca
+            JOIN controls c ON ca.control_id = c.id
+            WHERE ca.assessment_id = ?
+            """,
+            (asm_id,),
+        )
+        ca_map = {r["control_identifier"]: r["id"] for r in cursor.fetchall()}
+
+        # Fetch FND-001 finding ID
+        cursor.execute(
+            "SELECT id FROM findings WHERE assessment_id = ? AND finding_identifier = 'FND-001'",
+            (asm_id,),
+        )
+        fnd_row = cursor.fetchone()
+        fnd_001_id = fnd_row["id"] if fnd_row else None
+
+    # Risk 1: Unauthorized Account Access via Legacy Remote Gateway (Control A.8.5)
+    # Inherent 5x5=25, Current Residual 4x5=20 (Critical), Target 1x5=5, Mitigate
+    create_risk(
+        assessment_id=asm_id,
+        title="Unauthorized Account Access via Legacy Remote Gateway",
+        description="Contractors and external administrators can authenticate to legacy VPN ingress using single-factor passwords, bypassing corporate Okta adaptive MFA.",
+        asset_or_process="Corporate payment gateway and administrative jump hosts",
+        threat="External credential stuffing and password spray attacks",
+        vulnerability="Legacy VPN gateway permits single-factor password authentication for contractors without secondary challenge",
+        consequence="Unauthorized production access, credential theft, and lateral movement into the customer payment processing zone",
+        risk_category="Access Management",
+        existing_controls="Okta MFA enforced on corporate employees; network perimeter firewall rate-limiting",
+        risk_owner="Chief Information Security Officer",
+        responsible_department="Infrastructure & Network Engineering",
+        inherent_likelihood=5,
+        inherent_impact=5,
+        inherent_rationale="High exposure surface with credential-based attacks frequently targeting remote access endpoints.",
+        residual_likelihood=4,
+        residual_impact=5,
+        residual_rationale="Contractors currently access legacy gateway without secondary factor; probability of compromised credential remains high.",
+        target_likelihood=1,
+        target_impact=5,
+        target_rationale="Mandatory WebAuthn/FIDO2 hardware MFA reduces credential stuffing success probability to rare.",
+        treatment_strategy="Mitigate",
+        treatment_justification="Critical operational exposure requiring immediate architecture migration.",
+        proposed_treatment="Enforce MFA for relevant accounts by decommissioning gw-legacy.fincore.internal and routing contractors through Okta SAML proxy.",
+        treatment_owner="Head of Infrastructure",
+        target_treatment_date="2026-06-30",
+        status="Under Treatment",
+        assessor_name="Marcus Vance, Lead Auditor ISO 27001",
+        assessment_date="2026-05-15",
+        review_date="2026-08-30",
+        linked_control_ids=[ca_map["A.8.5"]] if "A.8.5" in ca_map else [],
+        linked_finding_ids=[fnd_001_id] if fnd_001_id else [],
+        db_path=db_path,
+    )
+
+    # Risk 2: Sensitive Customer Data Exposure in Cloud Archive Storage (Control A.8.24)
+    # Inherent 5x5=25, Current Residual 3x5=15 (High), Target 1x5=5, Mitigate
+    create_risk(
+        assessment_id=asm_id,
+        title="Sensitive Customer Data Exposure in Cloud Archive Storage",
+        description="Historical customer transaction archive buckets in AWS S3 lack customer-managed KMS encryption and TLS transport enforcement.",
+        asset_or_process="Multi-tenant customer payment transaction archives (S3)",
+        threat="Cloud credential compromise, insider data exfiltration, or storage misconfiguration",
+        vulnerability="Payment transaction archive bucket lacked mandatory KMS encryption and strict transport policy",
+        consequence="Cardholder data disclosure, regulatory investigation under PCI-DSS/GDPR, and customer trust loss",
+        risk_category="Data Protection",
+        existing_controls="AWS IAM least privilege role policies; VPC private endpoint routing",
+        risk_owner="Head of Data Governance",
+        responsible_department="Cloud Infrastructure & Security",
+        inherent_likelihood=5,
+        inherent_impact=5,
+        inherent_rationale="Payment card data is a prime target for cloud-targeted exfiltration.",
+        residual_likelihood=3,
+        residual_impact=5,
+        residual_rationale="VPC private endpoint restricts public network access, but lack of KMS encryption leaves data exposed to internal IAM compromise.",
+        target_likelihood=1,
+        target_impact=5,
+        target_rationale="Enforced KMS customer-managed key (CMK) encryption with strict key policy mitigates unauthorized data readability.",
+        treatment_strategy="Mitigate",
+        treatment_justification="Protection of data at rest is a non-negotiable regulatory mandate.",
+        proposed_treatment="Apply AWS KMS CMK encryption and enforce bucket policy denying non-TLS transport.",
+        treatment_owner="Cloud Security Architect",
+        target_treatment_date="2026-07-15",
+        status="Treatment Planned",
+        assessor_name="Marcus Vance, Lead Auditor ISO 27001",
+        assessment_date="2026-05-15",
+        review_date="2026-09-30",
+        linked_control_ids=[ca_map["A.8.24"]] if "A.8.24" in ca_map else [],
+        db_path=db_path,
+    )
+
+    # Risk 3: Permanent Payment Database Loss and Extended Outage (Control A.8.13)
+    # Inherent 4x5=20, Current Residual 3x4=12 (High), Target 1x4=4, Mitigate
+    create_risk(
+        assessment_id=asm_id,
+        title="Permanent Payment Database Loss and Extended Outage",
+        description="Production RDS PostgreSQL database snapshots exist, but restoration drill failed due to cross-account KMS decryption permissions and timeout.",
+        asset_or_process="Production PostgreSQL database instance (rds-prod-pg-payments)",
+        threat="Ransomware encryption, underlying EBS storage corruption, or regional AWS outage",
+        vulnerability="Restoration procedures untested; DR drill failed due to cross-account KMS decryption permissions and timeout",
+        consequence="Unrecoverable transaction data loss, recovery time exceeding 45 minutes RTO threshold, and payment gateway downtime",
+        risk_category="Business Continuity",
+        existing_controls="Automated daily RDS snapshots; cross-region snapshot replication",
+        risk_owner="Director of Engineering",
+        responsible_department="Database & Cloud Operations",
+        inherent_likelihood=4,
+        inherent_impact=5,
+        inherent_rationale="Database failure directly threatens operational solvency.",
+        residual_likelihood=3,
+        residual_impact=4,
+        residual_rationale="Snapshots exist but unverified recovery capabilities mean restore time in a real crisis remains uncertain.",
+        target_likelihood=1,
+        target_impact=4,
+        target_rationale="Automated monthly DR restoration verification with fixed KMS policies guarantees reliable recovery within 30-minute RTO.",
+        treatment_strategy="Mitigate",
+        treatment_justification="RTO compliance is contractual with tier-1 banking partners.",
+        proposed_treatment="Update cross-account KMS key access policy and schedule recurring automated restoration tests.",
+        treatment_owner="Database Operations Lead",
+        target_treatment_date="2026-08-01",
+        status="Open",
+        assessor_name="Marcus Vance, Lead Auditor ISO 27001",
+        assessment_date="2026-05-15",
+        review_date="2026-10-15",
+        linked_control_ids=[ca_map["A.8.13"]] if "A.8.13" in ca_map else [],
+        db_path=db_path,
+    )
+
+    # Risk 4: Privileged Infrastructure Access Misuse and Unapproved Changes (Control A.8.2)
+    # Inherent 4x4=16, Current Residual 2x4=8 (Medium), Target 1x4=4, Mitigate
+    create_risk(
+        assessment_id=asm_id,
+        title="Privileged Infrastructure Access Misuse and Unapproved Changes",
+        description="Standing administrative access across 6 engineers in AWS console creates risk of unmonitored or unapproved infrastructure changes.",
+        asset_or_process="Production AWS Cloud Management Console and Active Directory Domain Controllers",
+        threat="Malicious insider or hijacked administrator credential",
+        vulnerability="Standing administrative privileges across 6 engineers with quarterly reviews performed manually",
+        consequence="Unauthorized architecture changes, silent disabling of audit logging, and undetected sabotage",
+        risk_category="Access Management",
+        existing_controls="Root break-glass hardware YubiKey stored in physical safe; CyberArk vault for domain admin service accounts",
+        risk_owner="VP of Infrastructure",
+        responsible_department="IT Security Operations",
+        inherent_likelihood=4,
+        inherent_impact=4,
+        inherent_rationale="Full administrative access provides unfettered ability to modify production systems.",
+        residual_likelihood=2,
+        residual_impact=4,
+        residual_rationale="Hardware token safeguards root account; standing admin accounts exist but are limited to senior vetted engineers.",
+        target_likelihood=1,
+        target_impact=4,
+        target_rationale="Just-in-time (JIT) access elevation eliminates standing administrative privileges.",
+        treatment_strategy="Mitigate",
+        treatment_justification="Zero-standing-privilege architecture aligns with corporate security roadmap.",
+        proposed_treatment="Implement AWS IAM Identity Center with temporary permission sets and mandatory approval workflows.",
+        treatment_owner="IAM Team Lead",
+        target_treatment_date="2026-09-15",
+        status="Treatment Planned",
+        assessor_name="Marcus Vance, Lead Auditor ISO 27001",
+        assessment_date="2026-05-15",
+        review_date="2026-11-15",
+        linked_control_ids=[ca_map["A.8.2"]] if "A.8.2" in ca_map else [],
+        db_path=db_path,
+    )
+
+    # Risk 5: Social Engineering and Employee Phishing Credential Theft (Control A.6.3)
+    # Inherent 3x4=12, Current Residual 2x2=4 (Low), Target 2x2=4, Accept
+    create_risk(
+        assessment_id=asm_id,
+        title="Social Engineering and Employee Phishing Credential Theft",
+        description="Annual security awareness training completion rate stands at 74% with 62 non-technical staff overdue.",
+        asset_or_process="Corporate workforce email and workstation endpoints",
+        threat="Sophisticated spear phishing campaigns and business email compromise (BEC)",
+        vulnerability="Annual security awareness training completion rate at 74% (62 employees overdue)",
+        consequence="Employee credential theft leading to corporate network entry",
+        risk_category="Security Awareness",
+        existing_controls="Mandatory new-hire security onboarding; automated email warning banners on external communications; endpoint EDR agents",
+        risk_owner="Director of People & Culture",
+        responsible_department="People Operations & HR",
+        inherent_likelihood=3,
+        inherent_impact=4,
+        inherent_rationale="Human error is consistently targeted by external threat actors.",
+        residual_likelihood=2,
+        residual_impact=2,
+        residual_rationale="Overdue personnel are in non-technical sales roles with restricted access to production data. Defense-in-depth controls (EDR, mail gateway filtering) substantially contain the impact.",
+        target_likelihood=2,
+        target_impact=2,
+        target_rationale="Residual exposure is already at acceptable threshold; ongoing automated LMS reminders will maintain baseline compliance.",
+        treatment_strategy="Accept",
+        treatment_justification="Risk exposure is within organizational risk tolerance; cost of immediate disciplinary measures outweighs incremental security gain.",
+        acceptance_justification="Formal risk acceptance authorized by CISO and Risk Committee due to compensating technical controls (EDR, email gateway filtering) and low access privileges of non-compliant personnel.",
+        approving_authority="FinCore Information Security Risk Committee",
+        approval_status="Approved",
+        approval_date="2026-05-15",
+        status="Accepted",
+        assessor_name="Marcus Vance, Lead Auditor ISO 27001",
+        assessment_date="2026-05-15",
+        review_date="2026-11-30",
+        linked_control_ids=[ca_map["A.6.3"]] if "A.6.3" in ca_map else [],
+        db_path=db_path,
+    )

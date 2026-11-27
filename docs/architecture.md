@@ -291,3 +291,44 @@ Phase 3 implements end-to-end audit traceability from control implementation to 
 - **Gap & Findings Engine (`services/gap_engine.py`):** Structured testing documentation, diagnostic gap detection (failed tests, partial implementations, evidence deficiencies), formal CCCER finding creation, and verified closure governance.
 - **Evidence Management Workspace (`pages/evidence_page.py`):** Centralized file repository, audit review actions, and SHA-256 integrity check controls.
 - **Gap Analysis & Findings Workspace (`pages/gap_analysis_page.py`):** Deficiency diagnostics, formal findings directory, promotion workflow, and working-paper traceability matrix.
+
+---
+
+## 7. Phase 4 Risk Management & Scoring Engine Architecture
+
+Phase 4 establishes an integrated Risk Register and qualitative Risk Evaluation Engine linking risks directly to assessed controls, formal findings, and supporting evidence:
+
+```
+[ Formally Confirmed Finding ] <----\
+[ Annex A Security Control   ] <-----+----[ Identified Risk Record ]
+[ Cryptographic Evidence     ] <----/          |
+                                               v
+                                   [ Three-Tier Evaluation ]
+                                   - Inherent (Pre-Control)
+                                   - Current Residual (Active Posture)
+                                   - Target Residual (Post-Treatment)
+                                               |
+                                               v
+                                   [ 5x5 Likelihood x Impact Heatmap ]
+                                   [ Reassessment Review Ledger      ]
+```
+
+### Key Components:
+- **Risk Scoring Engine (`services/risk_engine.py`):**
+  - Pure calculation functions for risk scoring ($S = L \times I$), severity boundaries (Low 1–5, Medium 6–11, High 12–19, Critical 20–25), and explicit unassessed handling (`Score = None`, `Severity = "Not Assessed"`).
+  - 3-tier evaluation comparison logic ensuring target residual risk never overwrites current residual risk.
+  - 5×5 Plotly heatmap coordinate aggregation for Inherent, Current Residual, and Target Residual matrices.
+  - CSV export sanitization neutralizing formula execution characters (`=`, `+`, `-`, `@`, `\t`, `\r`) to mitigate CWE-1236.
+  - Review cadence tracking identifying overdue risk evaluations based on residual severity.
+- **Risk Service (`services/risk_service.py`):**
+  - Full CRUD lifecycle management for risks (`Identified`, `Under Assessment`, `Open`, `Treatment Planned`, `Under Treatment`, `Under Review`, `Accepted`, `Closed`).
+  - Automated reassessment detection snapshotting previous vs. new ratings to `risk_reviews`.
+  - Transactional governance enforcement: `Accepted` requires documented justification and `Approved` status; `Closed` requires `closure_rationale`.
+  - Many-to-many relationship management linking risks to findings, controls, and evidence with cross-assessment trigger protection.
+- **Risk Register Workspace (`pages/risk_page.py`):**
+  - 4-tab enterprise interface: Filterable Table & Metric Cards, Interactive 5×5 Plotly Heatmap with Cell Inspector, 5-Section Risk Entry/Evaluation Form, and Working Paper Detail View.
+- **Relational Integrity Triggers:**
+  - `trg_prevent_cross_assessment_risk_finding_insert / update`
+  - `trg_prevent_cross_assessment_risk_control_insert / update`
+  - `trg_prevent_cross_assessment_risk_evidence_insert / update`
+  - `trg_prevent_cross_assessment_risk_review_insert / update`

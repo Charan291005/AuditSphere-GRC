@@ -250,11 +250,58 @@ def _render_confirmed_findings_tab(assessment: Dict[str, Any], findings: List[Di
             unsafe_allow_html=True,
         )
 
-        b1, b2 = st.columns([1.5, 4])
+        b1, b2, b3 = st.columns([1.5, 1.8, 2.5])
         with b1:
             if st.button("View Working Paper", key=f"btn_wp_{f_id}", use_container_width=True):
                 st.session_state["working_paper_finding_id"] = f_id
                 st.info(f"Loaded {fnd['finding_identifier']} into 'Working-Paper Detail' tab.")
+
+        with b2:
+            if not is_archived:
+                if st.button("Create Linked Risk", key=f"btn_cr_risk_{f_id}", use_container_width=True):
+                    st.session_state["prefill_risk_finding_id"] = f_id
+                    st.session_state["prefill_risk_title"] = f"Risk arising from {fnd['finding_identifier']}: {fnd['title']}"
+                    st.session_state["prefill_risk_threat"] = fnd.get("condition", "")
+                    st.session_state["prefill_risk_consequence"] = fnd.get("effect", "")
+                    st.session_state["prefill_risk_treatment"] = fnd.get("recommendation", "")
+                    st.session_state["prefill_risk_ca_id"] = fnd.get("control_assessment_id")
+                    st.session_state["risk_register_action"] = "create"
+                    st.info(f"Finding details pre-filled. Navigate to 'Risk Register' in the sidebar to complete the risk assessment.")
+
+        # Display linked risks if any
+        from services.risk_service import get_assessment_risks, link_finding_to_risk, unlink_finding_from_risk
+        all_risks = get_assessment_risks(assessment["id"])
+        linked_risks = [r for r in all_risks if any(lf["id"] == f_id for lf in r.get("linked_findings", []))]
+
+        with st.expander(f"Associated Risks ({len(linked_risks)})", expanded=False):
+            if linked_risks:
+                st.markdown("**Linked Risk Records:**")
+                for lr in linked_risks:
+                    res_lvl = lr.get("residual_risk_level") or "Not Assessed"
+                    st.markdown(
+                        f"""
+                        <div style="font-size: 0.825rem; padding: 0.35rem 0.5rem; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 3px; margin-bottom: 0.35rem; display: flex; justify-content: space-between; align-items: center;">
+                            <span><strong>{lr['risk_identifier']}</strong>: {lr['title']} ({lr.get('risk_category', 'Other')})</span>
+                            <span>Residual: <strong>{res_lvl}</strong> &bull; Status: {render_status_badge(lr['status'])}</span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+            else:
+                st.caption("No risk records currently linked to this finding.")
+
+            if not is_archived:
+                unlinked_risks = [r for r in all_risks if not any(lf["id"] == f_id for lf in r.get("linked_findings", []))]
+                if unlinked_risks:
+                    st.markdown("<div style='margin-top: 0.5rem;'><strong>Link Existing Risk:</strong></div>", unsafe_allow_html=True)
+                    r_opts = {f"{r['risk_identifier']} – {r['title']}": r["id"] for r in unlinked_risks}
+                    with st.form(f"link_risk_form_{f_id}"):
+                        chosen_r_label = st.selectbox("Select Risk to Link", options=list(r_opts.keys()), key=f"sel_r_{f_id}", label_visibility="collapsed")
+                        if st.form_submit_button("Link Selected Risk"):
+                            chosen_r_id = r_opts[chosen_r_label]
+                            link_finding_to_risk(chosen_r_id, f_id)
+                            st.success(f"Linked finding to {chosen_r_label.split(' – ')[0]}.")
+                            st.rerun()
 
 
 def _render_create_finding_tab(assessment: Dict[str, Any], is_archived: bool):

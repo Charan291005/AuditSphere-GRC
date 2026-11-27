@@ -54,14 +54,20 @@ def get_dashboard_summary(
     evidence_metrics = None
     findings_metrics = None
     test_metrics = None
+    risk_metrics = None
 
     if active_assessment_id is not None:
         active_assessment = get_assessment(active_assessment_id, db_path=db_path)
         if active_assessment:
             from services.control_service import get_assessment_controls
+            from services.risk_service import get_assessment_risks
+            from services.risk_engine import calculate_risk_register_metrics
 
             controls = get_assessment_controls(active_assessment_id, db_path=db_path)
             control_metrics = calculate_overall_metrics(controls)
+
+            active_risks = get_assessment_risks(active_assessment_id, db_path=db_path)
+            risk_metrics = calculate_risk_register_metrics(active_risks)
 
             with db_session(db_path) as conn:
                 cursor = conn.cursor()
@@ -164,5 +170,6 @@ def get_dashboard_summary(
         "evidence_metrics": evidence_metrics,
         "findings_metrics": findings_metrics,
         "test_metrics": test_metrics,
+        "risk_metrics": risk_metrics,
         "recent_activities": recent_activities,
     }
