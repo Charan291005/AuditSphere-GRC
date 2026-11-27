@@ -383,6 +383,68 @@ def render_overview_page():
 
         st.markdown("<hr/>", unsafe_allow_html=True)
 
+    # PHASE 5: REMEDIATION & CORRECTIVE ACTION TELEMETRY
+    rem_metrics = summary.get("remediation_metrics")
+    if rem_metrics and active:
+        st.markdown(
+            '<div class="grc-card-title">Corrective Actions & Remediation Telemetry</div>',
+            unsafe_allow_html=True,
+        )
+
+        p5_c1, p5_c2, p5_c3, p5_c4, p5_c5, p5_c6, p5_c7 = st.columns(7)
+        with p5_c1:
+            render_kpi_card(
+                label="Total Actions",
+                value=f"{rem_metrics['total_actions']}",
+                description="Registered actions",
+            )
+        with p5_c2:
+            render_kpi_card(
+                label="Open",
+                value=f"{rem_metrics['open']}",
+                description="Awaiting start",
+            )
+        with p5_c3:
+            render_kpi_card(
+                label="In Progress",
+                value=f"{rem_metrics['in_progress']}",
+                description="Under treatment",
+            )
+        with p5_c4:
+            render_kpi_card(
+                label="Awaiting Verif",
+                value=f"{rem_metrics['awaiting_verification']}",
+                description="Completed 100%",
+            )
+        with p5_c5:
+            render_kpi_card(
+                label="Closed",
+                value=f"{rem_metrics['closed']}",
+                description="Verified effective",
+            )
+        with p5_c6:
+            render_kpi_card(
+                label="Overdue",
+                value=f"{rem_metrics['overdue']}",
+                description="Target date expired" if rem_metrics['overdue'] > 0 else "All on schedule",
+            )
+        with p5_c7:
+            rate_str = f"{rem_metrics['verified_closure_rate']:.1f}%" if rem_metrics['verified_closure_rate'] is not None else "N/A"
+            render_kpi_card(
+                label="Closure Rate",
+                value=rate_str,
+                description="Verified / Active",
+            )
+
+        st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+        rem_f1, rem_f2 = st.columns([1, 1])
+        with rem_f1:
+            _render_remediation_status_donut(rem_metrics["status_counts"])
+        with rem_f2:
+            _render_remediation_priority_bar(rem_metrics["priority_counts"])
+
+        st.markdown("<hr/>", unsafe_allow_html=True)
+
     # Activity Stream Row
     st.markdown(
         '<div class="grc-card-title">Recent Assessment Activity</div>',
@@ -634,6 +696,82 @@ def _render_evidence_status_chart(review_counts: Dict[str, int]):
     st.plotly_chart(fig, use_container_width=True)
 
 
+def _render_remediation_status_donut(status_counts: Dict[str, int]):
+    """Render donut chart for corrective action lifecycle status distribution."""
+    st.markdown("**Corrective Action Lifecycle Status**")
+    statuses = ["Open", "In Progress", "Awaiting Verification", "Closed", "Reopened", "Cancelled"]
+    colors = {
+        "Open": "#6B7280",
+        "In Progress": "#2563EB",
+        "Awaiting Verification": "#D97706",
+        "Closed": "#15803D",
+        "Reopened": "#751C35",
+        "Cancelled": "#9CA3AF",
+    }
+    vals = [status_counts.get(s, 0) for s in statuses]
+
+    if sum(vals) == 0:
+        st.info("No corrective actions recorded.")
+        return
+
+    fig = go.Figure(
+        data=[
+            go.Pie(
+                labels=statuses,
+                values=vals,
+                hole=0.48,
+                marker=dict(colors=[colors.get(s, "#6B7280") for s in statuses], line=dict(color="#FFFFFF", width=1.5)),
+                textinfo="value+percent",
+                hoverinfo="label+value+percent",
+                sort=False,
+            )
+        ]
+    )
+    fig.update_layout(
+        margin=dict(t=10, b=10, l=10, r=10),
+        height=240,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=10)),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_remediation_priority_bar(priority_counts: Dict[str, int]):
+    """Render horizontal bar chart for action priority distribution."""
+    st.markdown("**Corrective Action Priority Distribution**")
+    priorities = ["Critical", "High", "Medium", "Low"]
+    colors = ["#751C35", "#D9534F", "#F0AD4E", "#5CB85C"]
+    counts = [priority_counts.get(p, 0) for p in priorities]
+
+    if sum(counts) == 0:
+        st.info("No priority distribution data.")
+        return
+
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=counts,
+                y=priorities,
+                orientation="h",
+                marker=dict(color=colors),
+                text=[str(c) if c > 0 else "" for c in counts],
+                textposition="auto",
+            )
+        ]
+    )
+    fig.update_layout(
+        margin=dict(t=10, b=10, l=10, r=10),
+        height=240,
+        xaxis=dict(title="Number of Actions", dtick=1),
+        yaxis=dict(autorange="reversed"),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
 def _render_risk_severity_bar(rsk_metrics: Dict[str, Any]):
     """Render horizontal bar chart for current residual risk distribution."""
     st.markdown("**Current Residual Risk Distribution**")
@@ -704,6 +842,82 @@ def _render_treatment_donut_chart(treatment_counts: Dict[str, int]):
         height=240,
         showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=10)),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_remediation_status_donut(status_counts: Dict[str, int]):
+    """Render donut chart for corrective action lifecycle status distribution."""
+    st.markdown("**Corrective Action Lifecycle Status**")
+    statuses = ["Open", "In Progress", "Awaiting Verification", "Closed", "Reopened", "Cancelled"]
+    colors = {
+        "Open": "#6B7280",
+        "In Progress": "#2563EB",
+        "Awaiting Verification": "#D97706",
+        "Closed": "#15803D",
+        "Reopened": "#751C35",
+        "Cancelled": "#9CA3AF",
+    }
+    vals = [status_counts.get(s, 0) for s in statuses]
+
+    if sum(vals) == 0:
+        st.info("No corrective actions recorded.")
+        return
+
+    fig = go.Figure(
+        data=[
+            go.Pie(
+                labels=statuses,
+                values=vals,
+                hole=0.48,
+                marker=dict(colors=[colors.get(s, "#6B7280") for s in statuses], line=dict(color="#FFFFFF", width=1.5)),
+                textinfo="value+percent",
+                hoverinfo="label+value+percent",
+                sort=False,
+            )
+        ]
+    )
+    fig.update_layout(
+        margin=dict(t=10, b=10, l=10, r=10),
+        height=240,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(size=10)),
+        paper_bgcolor="#FFFFFF",
+        plot_bgcolor="#FFFFFF",
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_remediation_priority_bar(priority_counts: Dict[str, int]):
+    """Render horizontal bar chart for action priority distribution."""
+    st.markdown("**Corrective Action Priority Distribution**")
+    priorities = ["Critical", "High", "Medium", "Low"]
+    colors = ["#751C35", "#D9534F", "#F0AD4E", "#5CB85C"]
+    counts = [priority_counts.get(p, 0) for p in priorities]
+
+    if sum(counts) == 0:
+        st.info("No priority distribution data.")
+        return
+
+    fig = go.Figure(
+        data=[
+            go.Bar(
+                x=counts,
+                y=priorities,
+                orientation="h",
+                marker=dict(color=colors),
+                text=[str(c) if c > 0 else "" for c in counts],
+                textposition="auto",
+            )
+        ]
+    )
+    fig.update_layout(
+        margin=dict(t=10, b=10, l=10, r=10),
+        height=240,
+        xaxis=dict(title="Number of Actions", dtick=1),
+        yaxis=dict(autorange="reversed"),
         paper_bgcolor="#FFFFFF",
         plot_bgcolor="#FFFFFF",
     )

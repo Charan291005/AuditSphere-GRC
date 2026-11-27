@@ -578,8 +578,40 @@ def update_finding(
         raise ValueError("Title, criteria, condition, effect/impact, and recommendation are mandatory fields.")
 
     # Status closure validation
-    if status == "Closed" and not clean_ver:
-        raise ValueError("Closing a formal finding requires documented verification notes explaining the resolution.")
+    if status == "Closed":
+        if not clean_ver:
+            raise ValueError("Closing a formal finding requires documented verification notes explaining the resolution.")
+
+        # Phase 5: Check linked corrective actions if any exist
+        with db_session(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT r.id, r.remediation_identifier, r.status FROM remediation r
+                WHERE r.finding_id = ? OR r.id IN (
+                    SELECT remediation_id FROM remediation_findings WHERE finding_id = ?
+                )
+                """,
+                (finding_id, finding_id),
+            )
+            linked_rems = cursor.fetchall()
+            for rem in linked_rems:
+                if rem["status"] != "Closed":
+                    # Check if action has an Effective verification
+                    cursor.execute(
+                        """
+                        SELECT verification_result FROM remediation_verifications
+                        WHERE remediation_id = ?
+                        ORDER BY id DESC LIMIT 1
+                        """,
+                        (rem["id"],),
+                    )
+                    v_row = cursor.fetchone()
+                    if not v_row or v_row["verification_result"] != "Effective":
+                        raise ValueError(
+                            f"Cannot close finding: Outstanding linked corrective action '{rem['remediation_identifier']}' "
+                            f"is currently '{rem['status']}' and not yet verified as Effective."
+                        )
 
     now_iso = get_utc_now_iso()
     prev_status = fnd["status"]

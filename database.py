@@ -328,23 +328,132 @@ CREATE TABLE IF NOT EXISTS risk_reviews (
     review_timestamp TEXT NOT NULL
 );
 
--- 9. Remediation Tracker
+-- 9. Remediation / Corrective Actions Tracker
 CREATE TABLE IF NOT EXISTS remediation (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
-    finding_id INTEGER REFERENCES findings(id) ON DELETE CASCADE,
+    finding_id INTEGER REFERENCES findings(id) ON DELETE SET NULL,
     risk_id INTEGER REFERENCES risks(id) ON DELETE SET NULL,
-    remediation_identifier TEXT NOT NULL, -- e.g. 'REM-001'
+    remediation_identifier TEXT NOT NULL, -- e.g. 'ACT-001' or 'REM-001'
     action_title TEXT NOT NULL,
-    action_description TEXT NOT NULL,
+    action_description TEXT,
+    immediate_correction TEXT,
+    root_cause TEXT,
+    root_cause_analysis_method TEXT NOT NULL DEFAULT 'Direct Analysis' CHECK(root_cause_analysis_method IN ('Direct Analysis', '5 Whys', 'Fishbone / Ishikawa', 'Fault Tree', 'Under Investigation', 'Not Appropriate')),
+    root_cause_details TEXT, -- JSON or structured text for 5 Whys analysis
+    contributing_factors TEXT,
+    long_term_corrective_action TEXT,
+    expected_outcome TEXT,
+    action_priority TEXT NOT NULL DEFAULT 'Medium' CHECK(action_priority IN ('Low', 'Medium', 'High', 'Critical')),
+    priority_justification TEXT,
     action_owner TEXT NOT NULL,
-    target_date TEXT NOT NULL, -- YYYY-MM-DD
+    responsible_department TEXT,
+    assigned_date TEXT,
+    target_date TEXT NOT NULL, -- Current target completion date (YYYY-MM-DD)
+    original_target_date TEXT, -- Original deadline before extensions
     actual_completion_date TEXT, -- YYYY-MM-DD
-    status TEXT NOT NULL CHECK(status IN ('Not Started', 'In Progress', 'Pending Verification', 'Verified & Closed', 'Deferred')) DEFAULT 'Not Started',
-    verification_notes TEXT,
+    progress_percentage INTEGER NOT NULL DEFAULT 0 CHECK(progress_percentage BETWEEN 0 AND 100),
+    status TEXT NOT NULL DEFAULT 'Open' CHECK(status IN ('Open', 'In Progress', 'Awaiting Verification', 'Under Verification', 'Reopened', 'Closed', 'Cancelled')),
+    cancellation_reason TEXT,
+    implementation_summary TEXT,
+    verification_requirements TEXT,
+    closure_rationale TEXT,
+    reopen_justification TEXT,
+    is_archived INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     UNIQUE(assessment_id, remediation_identifier)
+);
+
+-- 9a. Remediation-to-Finding Mappings (Many-to-Many)
+CREATE TABLE IF NOT EXISTS remediation_findings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    remediation_id INTEGER NOT NULL REFERENCES remediation(id) ON DELETE CASCADE,
+    finding_id INTEGER NOT NULL REFERENCES findings(id) ON DELETE CASCADE,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(remediation_id, finding_id)
+);
+
+-- 9b. Remediation-to-Risk Mappings (Many-to-Many)
+CREATE TABLE IF NOT EXISTS remediation_risks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    remediation_id INTEGER NOT NULL REFERENCES remediation(id) ON DELETE CASCADE,
+    risk_id INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(remediation_id, risk_id)
+);
+
+-- 9c. Remediation-to-Control Mappings (Many-to-Many)
+CREATE TABLE IF NOT EXISTS remediation_controls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    remediation_id INTEGER NOT NULL REFERENCES remediation(id) ON DELETE CASCADE,
+    control_assessment_id INTEGER NOT NULL REFERENCES control_assessments(id) ON DELETE CASCADE,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(remediation_id, control_assessment_id)
+);
+
+-- 9d. Remediation-to-Evidence Mappings (Many-to-Many)
+CREATE TABLE IF NOT EXISTS remediation_evidence (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    remediation_id INTEGER NOT NULL REFERENCES remediation(id) ON DELETE CASCADE,
+    evidence_id INTEGER NOT NULL REFERENCES evidence(id) ON DELETE CASCADE,
+    evidence_type TEXT NOT NULL DEFAULT 'Remediation Evidence' CHECK(evidence_type IN ('Remediation Evidence', 'Verification Evidence', 'Audit Evidence', 'Supporting Policy', 'Other')),
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(remediation_id, evidence_id)
+);
+
+-- 9e. Remediation Progress History
+CREATE TABLE IF NOT EXISTS remediation_progress (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    remediation_id INTEGER NOT NULL REFERENCES remediation(id) ON DELETE CASCADE,
+    progress_percentage INTEGER NOT NULL CHECK(progress_percentage BETWEEN 0 AND 100),
+    description TEXT NOT NULL,
+    blockers TEXT,
+    updated_by TEXT NOT NULL,
+    timestamp TEXT NOT NULL
+);
+
+-- 9f. Remediation Deadline Extension History
+CREATE TABLE IF NOT EXISTS remediation_deadline_extensions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    remediation_id INTEGER NOT NULL REFERENCES remediation(id) ON DELETE CASCADE,
+    previous_deadline TEXT NOT NULL,
+    new_deadline TEXT NOT NULL,
+    extension_reason TEXT NOT NULL,
+    approving_authority TEXT NOT NULL,
+    timestamp TEXT NOT NULL
+);
+
+-- 9g. Remediation Verification Records
+CREATE TABLE IF NOT EXISTS remediation_verifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+    remediation_id INTEGER NOT NULL REFERENCES remediation(id) ON DELETE CASCADE,
+    verification_reference TEXT NOT NULL, -- e.g. 'VRF-001'
+    verification_objective TEXT NOT NULL,
+    verification_procedure TEXT NOT NULL,
+    expected_outcome TEXT NOT NULL,
+    observed_outcome TEXT NOT NULL,
+    sample_examined TEXT,
+    evidence_references TEXT,
+    related_control_testing_records TEXT,
+    evidence_limitations TEXT,
+    verifier_name TEXT NOT NULL,
+    verification_date TEXT NOT NULL, -- YYYY-MM-DD
+    verification_result TEXT NOT NULL CHECK(verification_result IN ('Effective', 'Ineffective', 'Inconclusive')),
+    verification_notes TEXT,
+    recommended_next_action TEXT,
+    created_at TEXT NOT NULL
 );
 
 -- 10. Activity Log (Assessment lifecycle history)
@@ -359,7 +468,9 @@ CREATE TABLE IF NOT EXISTS activity_log (
     new_status TEXT,
     timestamp TEXT NOT NULL
 );
+"""
 
+INDICES_SQL = """
 -- Performance indices
 CREATE INDEX IF NOT EXISTS idx_assessments_status ON assessments(status);
 CREATE INDEX IF NOT EXISTS idx_control_assessments_aid ON control_assessments(assessment_id);
@@ -390,6 +501,27 @@ CREATE INDEX IF NOT EXISTS idx_risk_evidence_eid ON risk_evidence(evidence_id);
 CREATE INDEX IF NOT EXISTS idx_risk_reviews_aid ON risk_reviews(assessment_id);
 CREATE INDEX IF NOT EXISTS idx_risk_reviews_rid ON risk_reviews(risk_id);
 CREATE INDEX IF NOT EXISTS idx_remediation_aid ON remediation(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_remediation_status ON remediation(status);
+CREATE INDEX IF NOT EXISTS idx_remediation_priority ON remediation(action_priority);
+CREATE INDEX IF NOT EXISTS idx_remediation_target_date ON remediation(target_date);
+CREATE INDEX IF NOT EXISTS idx_rem_findings_aid ON remediation_findings(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_rem_findings_rem_id ON remediation_findings(remediation_id);
+CREATE INDEX IF NOT EXISTS idx_rem_findings_fid ON remediation_findings(finding_id);
+CREATE INDEX IF NOT EXISTS idx_rem_risks_aid ON remediation_risks(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_rem_risks_rem_id ON remediation_risks(remediation_id);
+CREATE INDEX IF NOT EXISTS idx_rem_risks_rid ON remediation_risks(risk_id);
+CREATE INDEX IF NOT EXISTS idx_rem_controls_aid ON remediation_controls(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_rem_controls_rem_id ON remediation_controls(remediation_id);
+CREATE INDEX IF NOT EXISTS idx_rem_controls_caid ON remediation_controls(control_assessment_id);
+CREATE INDEX IF NOT EXISTS idx_rem_evidence_aid ON remediation_evidence(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_rem_evidence_rem_id ON remediation_evidence(remediation_id);
+CREATE INDEX IF NOT EXISTS idx_rem_evidence_eid ON remediation_evidence(evidence_id);
+CREATE INDEX IF NOT EXISTS idx_rem_progress_aid ON remediation_progress(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_rem_progress_rem_id ON remediation_progress(remediation_id);
+CREATE INDEX IF NOT EXISTS idx_rem_verif_aid ON remediation_verifications(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_rem_verif_rem_id ON remediation_verifications(remediation_id);
+CREATE INDEX IF NOT EXISTS idx_rem_deadlines_aid ON remediation_deadline_extensions(assessment_id);
+CREATE INDEX IF NOT EXISTS idx_rem_deadlines_rem_id ON remediation_deadline_extensions(remediation_id);
 CREATE INDEX IF NOT EXISTS idx_activity_aid ON activity_log(assessment_id);
 CREATE INDEX IF NOT EXISTS idx_activity_time ON activity_log(timestamp DESC);
 """
@@ -485,7 +617,7 @@ CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_remediation_insert
 BEFORE INSERT ON remediation
 BEGIN
     SELECT CASE
-        WHEN (SELECT assessment_id FROM findings WHERE id = NEW.finding_id) != NEW.assessment_id
+        WHEN NEW.finding_id IS NOT NULL AND (SELECT assessment_id FROM findings WHERE id = NEW.finding_id) != NEW.assessment_id
         THEN RAISE(ABORT, 'Cross-assessment violation: finding does not belong to remediation assessment')
         WHEN NEW.risk_id IS NOT NULL AND (SELECT assessment_id FROM risks WHERE id = NEW.risk_id) != NEW.assessment_id
         THEN RAISE(ABORT, 'Cross-assessment violation: risk does not belong to remediation assessment')
@@ -496,10 +628,130 @@ CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_remediation_update
 BEFORE UPDATE ON remediation
 BEGIN
     SELECT CASE
-        WHEN (SELECT assessment_id FROM findings WHERE id = NEW.finding_id) != NEW.assessment_id
+        WHEN NEW.finding_id IS NOT NULL AND (SELECT assessment_id FROM findings WHERE id = NEW.finding_id) != NEW.assessment_id
         THEN RAISE(ABORT, 'Cross-assessment violation: finding does not belong to remediation assessment')
         WHEN NEW.risk_id IS NOT NULL AND (SELECT assessment_id FROM risks WHERE id = NEW.risk_id) != NEW.assessment_id
         THEN RAISE(ABORT, 'Cross-assessment violation: risk does not belong to remediation assessment')
+    END;
+END;
+
+-- Phase 5: Prevent linking remediation to findings from different assessments
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_rem_finding_insert
+BEFORE INSERT ON remediation_findings
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM remediation WHERE id = NEW.remediation_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: remediation does not belong to specified assessment')
+        WHEN (SELECT assessment_id FROM findings WHERE id = NEW.finding_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: finding does not belong to specified assessment')
+    END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_rem_finding_update
+BEFORE UPDATE ON remediation_findings
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM remediation WHERE id = NEW.remediation_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: remediation does not belong to specified assessment')
+        WHEN (SELECT assessment_id FROM findings WHERE id = NEW.finding_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: finding does not belong to specified assessment')
+    END;
+END;
+
+-- Prevent linking remediation to risks from different assessments
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_rem_risk_insert
+BEFORE INSERT ON remediation_risks
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM remediation WHERE id = NEW.remediation_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: remediation does not belong to specified assessment')
+        WHEN (SELECT assessment_id FROM risks WHERE id = NEW.risk_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: risk does not belong to specified assessment')
+    END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_rem_risk_update
+BEFORE UPDATE ON remediation_risks
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM remediation WHERE id = NEW.remediation_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: remediation does not belong to specified assessment')
+        WHEN (SELECT assessment_id FROM risks WHERE id = NEW.risk_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: risk does not belong to specified assessment')
+    END;
+END;
+
+-- Prevent linking remediation to controls from different assessments
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_rem_control_insert
+BEFORE INSERT ON remediation_controls
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM remediation WHERE id = NEW.remediation_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: remediation does not belong to specified assessment')
+        WHEN (SELECT assessment_id FROM control_assessments WHERE id = NEW.control_assessment_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: control assessment does not belong to specified assessment')
+    END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_rem_control_update
+BEFORE UPDATE ON remediation_controls
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM remediation WHERE id = NEW.remediation_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: remediation does not belong to specified assessment')
+        WHEN (SELECT assessment_id FROM control_assessments WHERE id = NEW.control_assessment_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: control assessment does not belong to specified assessment')
+    END;
+END;
+
+-- Prevent linking remediation to evidence from different assessments
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_rem_evidence_insert
+BEFORE INSERT ON remediation_evidence
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM remediation WHERE id = NEW.remediation_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: remediation does not belong to specified assessment')
+        WHEN (SELECT assessment_id FROM evidence WHERE id = NEW.evidence_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: evidence does not belong to specified assessment')
+    END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_rem_evidence_update
+BEFORE UPDATE ON remediation_evidence
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM remediation WHERE id = NEW.remediation_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: remediation does not belong to specified assessment')
+        WHEN (SELECT assessment_id FROM evidence WHERE id = NEW.evidence_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: evidence does not belong to specified assessment')
+    END;
+END;
+
+-- Prevent linking progress, verifications, and deadlines to remediation from different assessments
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_rem_progress_insert
+BEFORE INSERT ON remediation_progress
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM remediation WHERE id = NEW.remediation_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: remediation does not belong to progress assessment')
+    END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_rem_verif_insert
+BEFORE INSERT ON remediation_verifications
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM remediation WHERE id = NEW.remediation_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: remediation does not belong to verification assessment')
+    END;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_prevent_cross_assessment_rem_deadline_insert
+BEFORE INSERT ON remediation_deadline_extensions
+BEGIN
+    SELECT CASE
+        WHEN (SELECT assessment_id FROM remediation WHERE id = NEW.remediation_id) != NEW.assessment_id
+        THEN RAISE(ABORT, 'Cross-assessment violation: remediation does not belong to deadline extension assessment')
     END;
 END;
 
@@ -790,6 +1042,187 @@ def run_migrations(conn: sqlite3.Connection) -> None:
         """
     )
 
+    # 7. Migrate 'remediation' table and child tables (Phase 5)
+    cursor.execute("PRAGMA table_info(remediation);")
+    rem_cols = {row["name"] for row in cursor.fetchall()}
+    if "immediate_correction" not in rem_cols:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS remediation_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+                finding_id INTEGER REFERENCES findings(id) ON DELETE SET NULL,
+                risk_id INTEGER REFERENCES risks(id) ON DELETE SET NULL,
+                remediation_identifier TEXT NOT NULL,
+                action_title TEXT NOT NULL,
+                action_description TEXT,
+                immediate_correction TEXT,
+                root_cause TEXT,
+                root_cause_analysis_method TEXT NOT NULL DEFAULT 'Direct Analysis' CHECK(root_cause_analysis_method IN ('Direct Analysis', '5 Whys', 'Fishbone / Ishikawa', 'Fault Tree', 'Under Investigation', 'Not Appropriate')),
+                root_cause_details TEXT,
+                contributing_factors TEXT,
+                long_term_corrective_action TEXT,
+                expected_outcome TEXT,
+                action_priority TEXT NOT NULL DEFAULT 'Medium' CHECK(action_priority IN ('Low', 'Medium', 'High', 'Critical')),
+                priority_justification TEXT,
+                action_owner TEXT NOT NULL,
+                responsible_department TEXT,
+                assigned_date TEXT,
+                target_date TEXT NOT NULL,
+                original_target_date TEXT,
+                actual_completion_date TEXT,
+                progress_percentage INTEGER NOT NULL DEFAULT 0 CHECK(progress_percentage BETWEEN 0 AND 100),
+                status TEXT NOT NULL DEFAULT 'Open' CHECK(status IN ('Open', 'In Progress', 'Awaiting Verification', 'Under Verification', 'Reopened', 'Closed', 'Cancelled')),
+                cancellation_reason TEXT,
+                implementation_summary TEXT,
+                verification_requirements TEXT,
+                closure_rationale TEXT,
+                reopen_justification TEXT,
+                is_archived INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(assessment_id, remediation_identifier)
+            );
+            """
+        )
+        # Copy existing data if remediation has rows
+        cursor.execute("SELECT COUNT(*) FROM remediation;")
+        old_count = cursor.fetchone()[0]
+        if old_count > 0:
+            cursor.execute(
+                """
+                INSERT INTO remediation_new (
+                    id, assessment_id, finding_id, risk_id, remediation_identifier,
+                    action_title, action_description, action_owner, target_date,
+                    actual_completion_date, status, verification_requirements,
+                    created_at, updated_at
+                )
+                SELECT
+                    id, assessment_id, finding_id, risk_id, remediation_identifier,
+                    action_title, action_description, action_owner, target_date,
+                    actual_completion_date,
+                    CASE status
+                        WHEN 'Not Started' THEN 'Open'
+                        WHEN 'In Progress' THEN 'In Progress'
+                        WHEN 'Pending Verification' THEN 'Awaiting Verification'
+                        WHEN 'Verified & Closed' THEN 'Closed'
+                        WHEN 'Deferred' THEN 'Cancelled'
+                        ELSE 'Open'
+                    END,
+                    verification_notes, created_at, updated_at
+                FROM remediation;
+                """
+            )
+        cursor.execute("DROP TABLE remediation;")
+        cursor.execute("ALTER TABLE remediation_new RENAME TO remediation;")
+
+    # Ensure child tables exist
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS remediation_findings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+            remediation_id INTEGER NOT NULL REFERENCES remediation(id) ON DELETE CASCADE,
+            finding_id INTEGER NOT NULL REFERENCES findings(id) ON DELETE CASCADE,
+            notes TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(remediation_id, finding_id)
+        );
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS remediation_risks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+            remediation_id INTEGER NOT NULL REFERENCES remediation(id) ON DELETE CASCADE,
+            risk_id INTEGER NOT NULL REFERENCES risks(id) ON DELETE CASCADE,
+            notes TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(remediation_id, risk_id)
+        );
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS remediation_controls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+            remediation_id INTEGER NOT NULL REFERENCES remediation(id) ON DELETE CASCADE,
+            control_assessment_id INTEGER NOT NULL REFERENCES control_assessments(id) ON DELETE CASCADE,
+            notes TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(remediation_id, control_assessment_id)
+        );
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS remediation_evidence (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+            remediation_id INTEGER NOT NULL REFERENCES remediation(id) ON DELETE CASCADE,
+            evidence_id INTEGER NOT NULL REFERENCES evidence(id) ON DELETE CASCADE,
+            evidence_type TEXT NOT NULL DEFAULT 'Remediation Evidence' CHECK(evidence_type IN ('Remediation Evidence', 'Verification Evidence', 'Audit Evidence', 'Supporting Policy', 'Other')),
+            notes TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE(remediation_id, evidence_id)
+        );
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS remediation_progress (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+            remediation_id INTEGER NOT NULL REFERENCES remediation(id) ON DELETE CASCADE,
+            progress_percentage INTEGER NOT NULL CHECK(progress_percentage BETWEEN 0 AND 100),
+            description TEXT NOT NULL,
+            blockers TEXT,
+            updated_by TEXT NOT NULL,
+            timestamp TEXT NOT NULL
+        );
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS remediation_deadline_extensions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+            remediation_id INTEGER NOT NULL REFERENCES remediation(id) ON DELETE CASCADE,
+            previous_deadline TEXT NOT NULL,
+            new_deadline TEXT NOT NULL,
+            extension_reason TEXT NOT NULL,
+            approving_authority TEXT NOT NULL,
+            timestamp TEXT NOT NULL
+        );
+        """
+    )
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS remediation_verifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            assessment_id INTEGER NOT NULL REFERENCES assessments(id) ON DELETE CASCADE,
+            remediation_id INTEGER NOT NULL REFERENCES remediation(id) ON DELETE CASCADE,
+            verification_reference TEXT NOT NULL,
+            verification_objective TEXT NOT NULL,
+            verification_procedure TEXT NOT NULL,
+            expected_outcome TEXT NOT NULL,
+            observed_outcome TEXT NOT NULL,
+            sample_examined TEXT,
+            evidence_references TEXT,
+            related_control_testing_records TEXT,
+            evidence_limitations TEXT,
+            verifier_name TEXT NOT NULL,
+            verification_date TEXT NOT NULL,
+            verification_result TEXT NOT NULL CHECK(verification_result IN ('Effective', 'Ineffective', 'Inconclusive')),
+            verification_notes TEXT,
+            recommended_next_action TEXT,
+            created_at TEXT NOT NULL
+        );
+        """
+    )
+
 
 def sync_controls_catalogue(conn: sqlite3.Connection, catalogue_path: Optional[Path] = None) -> None:
     """
@@ -922,8 +1355,9 @@ def init_db(db_path: Optional[str | Path] = None) -> None:
     """
     with db_session(db_path) as conn:
         conn.executescript(SCHEMA_SQL)
-        conn.executescript(TRIGGERS_SQL)
         run_migrations(conn)
+        conn.executescript(INDICES_SQL)
+        conn.executescript(TRIGGERS_SQL)
         sync_controls_catalogue(conn)
         initialize_missing_controls_for_all_assessments(conn)
 

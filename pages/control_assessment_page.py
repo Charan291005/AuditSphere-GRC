@@ -271,8 +271,8 @@ def _render_control_detail_tabs(assessment: Dict[str, Any], control: Dict[str, A
         unsafe_allow_html=True,
     )
 
-    t_eval, t_evidence, t_testing, t_findings = st.tabs(
-        ["Control Evaluation", "Mapped Evidence", "Control Testing", "Findings & Gaps"]
+    t_eval, t_evidence, t_testing, t_findings, t_remediation = st.tabs(
+        ["Control Evaluation", "Mapped Evidence", "Control Testing", "Findings & Gaps", "Corrective Actions & Reassessment"]
     )
 
     with t_eval:
@@ -286,6 +286,9 @@ def _render_control_detail_tabs(assessment: Dict[str, Any], control: Dict[str, A
 
     with t_findings:
         _render_findings_subtab(assessment, control, is_archived)
+
+    with t_remediation:
+        _render_remediation_subtab(assessment, control, is_archived)
 
 
 def _render_evaluation_form(assessment: Dict[str, Any], control: Dict[str, Any], is_archived: bool):
@@ -565,6 +568,105 @@ def _render_testing_subtab(assessment: Dict[str, Any], control: Dict[str, Any], 
                         st.error(f"Error: {str(ex)}")
 
 
+def _render_remediation_subtab(assessment: Dict[str, Any], control: Dict[str, Any], is_archived: bool):
+    """Render linked corrective actions and explicit control reassessment workflow."""
+    from services.remediation_service import (
+        get_control_remediations,
+        get_remediation_verifications,
+        get_remediation_evidence,
+    )
+
+    ca_id = control["assessment_control_id"]
+    linked_actions = get_control_remediations(ca_id)
+
+    st.markdown("##### Linked Corrective Actions & Remediation Status")
+    st.caption("Review implemented corrective actions and verified evidence before updating control posture.")
+
+    if not linked_actions:
+        st.info("No corrective actions currently linked to this control.")
+    else:
+        for act in linked_actions:
+            v_list = get_remediation_verifications(act["id"])
+            v_res = v_list[0]["verification_result"] if v_list else "Unverified"
+            ev_list = get_remediation_evidence(act["id"])
+
+            st.markdown(
+                f"""
+                <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-left: 3px solid #751C35; padding: 0.85rem 1rem; border-radius: 3px; margin-bottom: 0.65rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong>{act['remediation_identifier']} – {act['action_title']} ({act['action_priority']})</strong>
+                        <span style="font-size: 0.8rem; padding: 0.2rem 0.5rem; background: #EFF6FF; border-radius: 2px;">
+                            Status: <strong>{act['status']}</strong> &bull; Progress: <strong>{act['progress_percentage']}%</strong>
+                        </span>
+                    </div>
+                    <div style="font-size: 0.825rem; color: #4B5563; margin-top: 0.35rem;">
+                        <strong>Owner:</strong> {act['action_owner']} &bull;
+                        <strong>Target Date:</strong> {act['target_date']} &bull;
+                        <strong>Latest Verification:</strong> <strong>{v_res}</strong>
+                    </div>
+                    <div style="font-size: 0.8rem; color: #6B7280; margin-top: 0.25rem;">
+                        <strong>Remediation Evidence:</strong> {', '.join([e['title'] for e in ev_list]) if ev_list else 'None linked'}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<hr style='margin: 1.25rem 0;' />", unsafe_allow_html=True)
+    st.markdown("##### 🔄 Explicit Control Reassessment")
+    st.caption(
+        "Closing corrective actions does not automatically mark controls as Implemented. "
+        "The assessor must review evidence and record updated assessment observations."
+    )
+
+    if is_archived:
+        st.warning("Cannot reassess control in an Archived assessment.")
+        return
+
+    with st.form(f"reassess_ctrl_form_{ca_id}"):
+        curr_status_idx = (
+            VALID_CONTROL_STATUSES.index(control["status"])
+            if control["status"] in VALID_CONTROL_STATUSES
+            else 0
+        )
+        reass_status = st.selectbox(
+            "Reassessed Implementation Status *",
+            options=VALID_CONTROL_STATUSES,
+            index=curr_status_idx,
+        )
+
+        reass_obs = st.text_area(
+            "Updated Assessment Observation *",
+            value=control.get("assessment_observation") or "",
+            placeholder="Document how remediation evidence confirms control implementation...",
+            height=90,
+        )
+
+        reass_rec = st.text_area(
+            "Outstanding Recommendations (if not fully implemented)",
+            value=control.get("recommendation") or "",
+            placeholder="Remaining gaps or ongoing monitoring requirements...",
+            height=60,
+        )
+
+        reass_btn = st.form_submit_button("Save Reassessed Control Status", type="primary")
+
+        if reass_btn:
+            try:
+                update_control_assessment(
+                    control_assessment_id=ca_id,
+                    status=reass_status,
+                    assessment_observation=reass_obs,
+                    recommendation=reass_rec,
+                    assessor_name=assessment.get("lead_assessor") or "Lead Assessor",
+                    assessment_date=date.today().isoformat(),
+                )
+                st.success(f"Control {control['control_identifier']} reassessed successfully to '{reass_status}'!")
+                st.rerun()
+            except Exception as ex:
+                st.error(f"Error reassessing control: {ex}")
+
+
 def _render_findings_subtab(assessment: Dict[str, Any], control: Dict[str, Any], is_archived: bool):
     """Render audit findings linked to the selected control and form to create a finding."""
     st.markdown("##### Linked Audit Findings")
@@ -666,3 +768,102 @@ def _render_findings_subtab(assessment: Dict[str, Any], control: Dict[str, Any],
                         st.error(f"Validation Error: {str(ve)}")
                     except Exception as ex:
                         st.error(f"Error: {str(ex)}")
+
+
+def _render_remediation_subtab(assessment: Dict[str, Any], control: Dict[str, Any], is_archived: bool):
+    """Render linked corrective actions and explicit control reassessment workflow."""
+    from services.remediation_service import (
+        get_control_remediations,
+        get_remediation_verifications,
+        get_remediation_evidence,
+    )
+
+    ca_id = control["assessment_control_id"]
+    linked_actions = get_control_remediations(ca_id)
+
+    st.markdown("##### Linked Corrective Actions & Remediation Status")
+    st.caption("Review implemented corrective actions and verified evidence before updating control posture.")
+
+    if not linked_actions:
+        st.info("No corrective actions currently linked to this control.")
+    else:
+        for act in linked_actions:
+            v_list = get_remediation_verifications(act["id"])
+            v_res = v_list[0]["verification_result"] if v_list else "Unverified"
+            ev_list = get_remediation_evidence(act["id"])
+
+            st.markdown(
+                f"""
+                <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-left: 3px solid #751C35; padding: 0.85rem 1rem; border-radius: 3px; margin-bottom: 0.65rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong>{act['remediation_identifier']} – {act['action_title']} ({act['action_priority']})</strong>
+                        <span style="font-size: 0.8rem; padding: 0.2rem 0.5rem; background: #EFF6FF; border-radius: 2px;">
+                            Status: <strong>{act['status']}</strong> &bull; Progress: <strong>{act['progress_percentage']}%</strong>
+                        </span>
+                    </div>
+                    <div style="font-size: 0.825rem; color: #4B5563; margin-top: 0.35rem;">
+                        <strong>Owner:</strong> {act['action_owner']} &bull;
+                        <strong>Target Date:</strong> {act['target_date']} &bull;
+                        <strong>Latest Verification:</strong> <strong>{v_res}</strong>
+                    </div>
+                    <div style="font-size: 0.8rem; color: #6B7280; margin-top: 0.25rem;">
+                        <strong>Remediation Evidence:</strong> {', '.join([e['title'] for e in ev_list]) if ev_list else 'None linked'}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("<hr style='margin: 1.25rem 0;' />", unsafe_allow_html=True)
+    st.markdown("##### 🔄 Explicit Control Reassessment")
+    st.caption(
+        "Closing corrective actions does not automatically mark controls as Implemented. "
+        "The assessor must review evidence and record updated assessment observations."
+    )
+
+    if is_archived:
+        st.warning("Cannot reassess control in an Archived assessment.")
+        return
+
+    with st.form(f"reassess_ctrl_form_{ca_id}"):
+        curr_status_idx = (
+            VALID_CONTROL_STATUSES.index(control["status"])
+            if control["status"] in VALID_CONTROL_STATUSES
+            else 0
+        )
+        reass_status = st.selectbox(
+            "Reassessed Implementation Status *",
+            options=VALID_CONTROL_STATUSES,
+            index=curr_status_idx,
+        )
+
+        reass_obs = st.text_area(
+            "Updated Assessment Observation *",
+            value=control.get("assessment_observation") or "",
+            placeholder="Document how remediation evidence confirms control implementation...",
+            height=90,
+        )
+
+        reass_rec = st.text_area(
+            "Outstanding Recommendations (if not fully implemented)",
+            value=control.get("recommendation") or "",
+            placeholder="Remaining gaps or ongoing monitoring requirements...",
+            height=60,
+        )
+
+        reass_btn = st.form_submit_button("Save Reassessed Control Status", type="primary")
+
+        if reass_btn:
+            try:
+                update_control_assessment(
+                    control_assessment_id=ca_id,
+                    status=reass_status,
+                    assessment_observation=reass_obs,
+                    recommendation=reass_rec,
+                    assessor_name=assessment.get("lead_assessor") or "Lead Assessor",
+                    assessment_date=date.today().isoformat(),
+                )
+                st.success(f"Control {control['control_identifier']} reassessed successfully to '{reass_status}'!")
+                st.rerun()
+            except Exception as ex:
+                st.error(f"Error reassessing control: {ex}")

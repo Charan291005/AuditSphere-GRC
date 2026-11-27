@@ -332,3 +332,60 @@ Phase 4 establishes an integrated Risk Register and qualitative Risk Evaluation 
   - `trg_prevent_cross_assessment_risk_control_insert / update`
   - `trg_prevent_cross_assessment_risk_evidence_insert / update`
   - `trg_prevent_cross_assessment_risk_review_insert / update`
+
+---
+
+## 8. Phase 5 Remediation & Corrective Action Architecture
+
+Phase 5 completes the end-to-end ISMS assessment governance lifecycle by implementing an audited Corrective Action Tracker, Root Cause Analysis engine (5 Whys), Progress & Deadline Extension ledgers, and Effectiveness Verification system:
+
+```
+[ Assessment ] ---> [ Control Evaluation ] ---> [ Evidence ] ---> [ Control Test ]
+                                                                          |
+                                                                          v
+[ Finding Closed ] <--- [ Finding Confirmed ] <---------------------------+
+       ^                         |
+       |                         v
+       |                  [ Risk Register ]
+       |                         |
+       |                         v
+       |            [ Corrective Action (ACT) ]
+       |             - Containment vs Long-Term
+       |             - Root Cause (5 Whys)
+       |             - Progress Tracking (0-100%)
+       |             - Deadline Extensions
+       |                         |
+       |                         v
+       |            [ Effectiveness Verification ]
+       |             (Effective / Ineffective)
+       |                         |
+       +--- Must Be Effective ---+
+```
+
+### Key Components:
+- **Remediation Engine (`services/remediation_engine.py`):**
+  - Pure deterministic validation functions: `validate_status_transition`, `validate_closure_eligibility`, `validate_priority_alignment`, and `suggest_priority_from_source`.
+  - Comprehensive metrics calculator (`calculate_remediation_metrics`) tracking active actions, overdue count, due today, due in 7 days, completed on time, and verified closure rate ($\frac{\text{Closed}}{\text{Total} - \text{Cancelled}} \times 100$).
+  - CWE-1236 CSV export sanitization neutralizing formula execution characters.
+- **Remediation Service (`services/remediation_service.py`):**
+  - Full transactional lifecycle management: `create_remediation`, `update_remediation`, `record_progress_update`, `extend_deadline`, `record_verification`, `close_remediation`, `reopen_remediation`, `cancel_remediation`, and `archive_remediation`.
+  - Many-to-many relationship management across findings, risks, controls, and evidence artifacts.
+  - Relational isolation enforcing that archived assessments cannot mutate corrective actions or verification ledgers.
+- **Remediation Tracker Workspace (`pages/remediation_page.py`):**
+  - 4-tab enterprise interface:
+    - **Tab 1: Directory & Register:** Multi-criteria filterable directory, telemetry KPI cards, and CSV export.
+    - **Tab 2: Corrective Action Form:** 5-section entry form with interactive 5 Whys dynamic builder, priority alignment validator, and relationship selectors.
+    - **Tab 3: Working Paper & Detail View:** Full CCCER finding traceability grid, 5 Whys sequence viewer, progress timeline, deadline extensions ledger, and verification record history.
+    - **Tab 4: Lifecycle & Governance Actions:** Progress logging, formal deadline extension requests, independent effectiveness verifications, formal closure, reopening, and cancellation.
+- **Relational Child Tables & Triggers:**
+  - `remediation_findings`, `remediation_risks`, `remediation_controls`, `remediation_evidence`
+  - `remediation_progress`, `remediation_deadline_extensions`, `remediation_verifications`
+  - Cross-assessment triggers preventing any cross-assessment foreign relationships:
+    - `trg_prevent_cross_assessment_remediation_finding_insert / update`
+    - `trg_prevent_cross_assessment_remediation_risk_insert / update`
+    - `trg_prevent_cross_assessment_remediation_control_insert / update`
+    - `trg_prevent_cross_assessment_remediation_evidence_insert / update`
+    - `trg_prevent_cross_assessment_remediation_progress_insert / update`
+    - `trg_prevent_cross_assessment_remediation_deadline_ext_insert / update`
+    - `trg_prevent_cross_assessment_remediation_verif_insert / update`
+

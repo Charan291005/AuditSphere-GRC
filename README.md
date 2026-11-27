@@ -27,7 +27,7 @@ AuditSphere solves this by providing a unified assessment workspace with structu
 - **Database Engine:** SQLite (WAL Mode, Parameterized Queries, Foreign Keys Enforced)
 - **Data & Visualizations:** Pandas, Plotly
 - **Document Generation:** ReportLab
-- **Testing:** Pytest (61 automated tests)
+- **Testing:** Pytest (82 automated tests)
 - **VCS:** Git
 
 No external LLM APIs, paid services, microservices, or complex container dependencies are required.
@@ -121,6 +121,31 @@ No external LLM APIs, paid services, microservices, or complex container depende
 - **FinCore Technologies Phase 4 Risk Expansion:**
   - 5 realistic demonstration risks seeded with diverse severity: Critical (`RSK-001`), High (`RSK-002`, `RSK-003`), Medium (`RSK-004`), Low (`RSK-005`).
 
+### Phase 5: Remediation and Corrective Action Management
+- **Remediation Tracker Workspace (`pages/remediation_page.py`):**
+  - Complete 4-tab interface: Action Directory & Register, 5-Section Corrective Action Form, Working Paper & Traceability View, and Lifecycle & Governance Actions.
+  - Multi-criteria filtering by lifecycle status, priority, owner, department, linked finding, risk, or control.
+  - CSV export with formula injection defense (CWE-1236) neutralizing spreadsheet formula prefixes.
+- **Root Cause Analysis (RCA) Engine (`services/remediation_engine.py`):**
+  - Distinction between immediate containment (correction) and systemic corrective action (Clause 10.2).
+  - Interactive **5 Whys Problem Decomposition** interface with structured problem statement, iterative why-levels, and root cause synthesis.
+  - Support for Direct Analysis and justified exceptions (`Not Appropriate` with mandatory rationale).
+- **Corrective Action Lifecycle State Machine:**
+  - Permitted transitions: `Open`, `In Progress`, `Awaiting Verification`, `Under Verification`, `Reopened`, `Closed`, `Cancelled`.
+  - Prohibited direct jumps (e.g. `Open` -> `Closed`, `In Progress` -> `Closed` are strictly blocked).
+  - Strict closure governance: requires 100% progress, implementation summary, supporting evidence without integrity warnings, latest verification `Effective`, documented closure rationale, and root cause or justification.
+- **Progress Tracking & Deadline Extension Governance:**
+  - Granular progress percentage tracking (0% to 100%) with immutable chronological history ledger.
+  - Formal deadline extensions capturing previous deadline, new deadline, justification, and approving authority.
+- **Effectiveness Verification Ledger:**
+  - Structured verification working paper documenting objective, procedure, expected vs. observed outcome, sample examined, verifier identity, date, and result (`Effective`, `Partially Effective`, `Ineffective`).
+- **Audit Findings Downstream Traceability Gate:**
+  - Audit findings cannot be marked `Closed` if any linked corrective actions remain open or unverified.
+- **Explicit Control & Risk Reassessments:**
+  - Closing an action does not auto-mutate control statuses or risk scores; dedicated forms support explicit, documented reassessments with audit logging.
+- **FinCore Technologies Phase 5 Remediation Expansion:**
+  - 5 realistic demonstration corrective actions seeded: `ACT-001` (In Progress, 60%), `ACT-002` (Open, 0%), `ACT-003` (Open, 0%), `ACT-004` (Awaiting Verification, 100%), `ACT-005` (Closed, 100%, Verified Effective). Verified closure rate: 20%.
+
 ---
 
 ## 4. Demonstration Dataset Instructions
@@ -128,10 +153,10 @@ No external LLM APIs, paid services, microservices, or complex container depende
 To explore AuditSphere with a pre-populated, realistic simulated assessment:
 
 1. Launch the application: `streamlit run app.py`
-2. Navigate to **Overview Dashboard**, **ISO 27001 Control Assessment**, **Evidence Management**, **Gap Analysis & Findings**, or **Risk Register**.
+2. Navigate to **Overview Dashboard**, **ISO 27001 Control Assessment**, **Evidence Management**, **Gap Analysis & Findings**, **Risk Register**, or **Remediation Tracker**.
 3. Click the **"Load Demo Data (FinCore)"** button if not already loaded.
 4. The system will load the fictional assessment for **FinCore Technologies** ($ID\ \#2$).
-5. Inspect the 12 evaluated controls, 5 evidence files with SHA-256 verification, failed control test `TST-001`, corroborated finding `FND-001`, and 5 classified risks with active residual heatmap distribution.
+5. Inspect the 12 evaluated controls, 5 evidence files with SHA-256 verification, failed control test `TST-001`, corroborated finding `FND-001`, 5 classified risks with active residual heatmap distribution, and 5 corrective actions with 20% verified closure rate.
 
 ---
 
@@ -181,10 +206,10 @@ Access the interface at: `http://localhost:8501`
 
 ## 7. Running Automated Tests
 
-Run the full pytest suite (covering Phase 1, Phase 2, and Phase 3):
+Run the full pytest suite (covering Phases 1 through 5):
 
 ```bash
 pytest tests/ -v
 ```
 
-All 43 automated unit and integration tests pass with 100% success.
+All 82 automated unit and integration tests pass with 100% success.

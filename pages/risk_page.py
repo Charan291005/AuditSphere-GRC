@@ -849,7 +849,13 @@ def _render_risk_detail_tab(assessment: Dict[str, Any], is_archived: bool):
 
     # Linked Entities Tabs
     st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
-    l_tab1, l_tab2, l_tab3, l_tab4 = st.tabs(["Linked Audit Findings", "Linked Controls", "Linked Evidence", "Reassessment History"])
+    l_tab1, l_tab2, l_tab3, l_tab4, l_tab5 = st.tabs([
+        "Linked Audit Findings",
+        "Linked Controls",
+        "Linked Evidence",
+        "Reassessment History",
+        "Linked Corrective Actions & Reassessment",
+    ])
 
     with l_tab1:
         f_list = risk.get("linked_findings", [])
@@ -899,6 +905,113 @@ def _render_risk_detail_tab(assessment: Dict[str, Any], is_archived: bool):
                 )
         else:
             st.caption("No historical reassessments logged for this risk.")
+
+    with l_tab5:
+        from services.remediation_service import (
+            get_risk_remediations,
+            get_remediation_verifications,
+            get_remediation_evidence,
+        )
+
+        risk_rems = get_risk_remediations(risk["id"])
+        st.markdown("##### Linked Corrective Actions & Treatment Progress")
+        st.caption(
+            "Track operational remediation tasks addressing this risk. "
+            "Residual risk scores are not automatically lowered; an explicit reassessment is required."
+        )
+
+        if not risk_rems:
+            st.info("No corrective actions currently linked to this risk.")
+        else:
+            for act in risk_rems:
+                verifs = get_remediation_verifications(act["id"])
+                v_res = verifs[0]["verification_result"] if verifs else "Unverified"
+                ev_list = get_remediation_evidence(act["id"])
+
+                st.markdown(
+                    f"""
+                    <div style="background: #FFFFFF; border: 1px solid #E5E7EB; border-left: 3px solid #751C35; padding: 0.75rem 1rem; border-radius: 3px; margin-bottom: 0.5rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <strong>{act['remediation_identifier']} – {act['action_title']} ({act['action_priority']})</strong>
+                            <span style="font-size: 0.8rem; padding: 0.2rem 0.5rem; background: #EFF6FF; border-radius: 2px;">
+                                Status: <strong>{act['status']}</strong> &bull; Progress: <strong>{act['progress_percentage']}%</strong>
+                            </span>
+                        </div>
+                        <div style="font-size: 0.825rem; color: #4B5563; margin-top: 0.35rem;">
+                            <strong>Owner:</strong> {act['action_owner']} &bull;
+                            <strong>Target Date:</strong> {act['target_date']} &bull;
+                            <strong>Latest Verification:</strong> <strong>{v_res}</strong>
+                        </div>
+                        <div style="font-size: 0.8rem; color: #6B7280; margin-top: 0.25rem;">
+                            <strong>Remediation Evidence:</strong> {', '.join([e['title'] for e in ev_list]) if ev_list else 'None linked'}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+        st.markdown("<hr style='margin: 1rem 0;' />", unsafe_allow_html=True)
+        st.markdown("##### 🔄 Explicit Risk Reassessment")
+        st.caption(
+            "Assess current residual risk based on verified control testing and remediation evidence. "
+            "Target residual risk remains an aspirational estimate."
+        )
+
+        if is_archived:
+            st.warning("Cannot reassess risk in an Archived assessment.")
+        else:
+            with st.form(f"reassess_risk_form_{risk['id']}"):
+                col_l, col_i = st.columns(2)
+                curr_l = risk.get("residual_likelihood") or 3
+                curr_i = risk.get("residual_impact") or 3
+
+                with col_l:
+                    reass_l = st.selectbox(
+                        "Reassessed Residual Likelihood *",
+                        options=[1, 2, 3, 4, 5],
+                        index=[1, 2, 3, 4, 5].index(curr_l) if curr_l in [1, 2, 3, 4, 5] else 2,
+                    )
+                with col_i:
+                    reass_i = st.selectbox(
+                        "Reassessed Residual Impact *",
+                        options=[1, 2, 3, 4, 5],
+                        index=[1, 2, 3, 4, 5].index(curr_i) if curr_i in [1, 2, 3, 4, 5] else 2,
+                    )
+
+                reass_rationale = st.text_area(
+                    "Reassessment Rationale *",
+                    placeholder="Document specific verified changes justifying the updated likelihood and impact ratings...",
+                    height=75,
+                )
+
+                reass_ctrls = st.text_input(
+                    "Updated Existing Controls Description",
+                    value=risk.get("existing_controls") or "",
+                )
+
+                reass_reviewer = st.text_input("Reviewer Name *", value=assessment.get("lead_assessor") or "Lead Risk Assessor")
+                reass_date = st.text_input("Review Date", value=date.today().isoformat())
+
+                reass_submit = st.form_submit_button("Save Reassessed Residual Risk", type="primary")
+
+                if reass_submit:
+                    if not reass_rationale.strip():
+                        st.error("Reassessment rationale is required.")
+                    else:
+                        try:
+                            update_risk(
+                                risk_id=risk["id"],
+                                residual_likelihood=reass_l,
+                                residual_impact=reass_i,
+                                residual_rationale=reass_rationale,
+                                existing_controls=reass_ctrls,
+                                review_date=reass_date,
+                                assessor_name=reass_reviewer,
+                            )
+                            st.success(f"Risk {r_ref} reassessed successfully! New residual score: {reass_l * reass_i}.")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error reassessing risk: {e}")
 
     # Archival Action
     if not is_archived:

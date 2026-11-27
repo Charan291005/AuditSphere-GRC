@@ -250,7 +250,7 @@ def _render_confirmed_findings_tab(assessment: Dict[str, Any], findings: List[Di
             unsafe_allow_html=True,
         )
 
-        b1, b2, b3 = st.columns([1.5, 1.8, 2.5])
+        b1, b2, b3 = st.columns([1.5, 1.8, 2.0])
         with b1:
             if st.button("View Working Paper", key=f"btn_wp_{f_id}", use_container_width=True):
                 st.session_state["working_paper_finding_id"] = f_id
@@ -267,6 +267,71 @@ def _render_confirmed_findings_tab(assessment: Dict[str, Any], findings: List[Di
                     st.session_state["prefill_risk_ca_id"] = fnd.get("control_assessment_id")
                     st.session_state["risk_register_action"] = "create"
                     st.info(f"Finding details pre-filled. Navigate to 'Risk Register' in the sidebar to complete the risk assessment.")
+
+        with b3:
+            if not is_archived:
+                if st.button("Create Corrective Action", key=f"btn_cr_rem_{f_id}", use_container_width=True):
+                    st.session_state["navigation_page"] = "Remediation Tracker"
+                    st.info(f"Navigate to 'Remediation Tracker' in sidebar to create corrective action for {fnd['finding_identifier']}.")
+                    st.rerun()
+
+        # Phase 5: Display linked corrective actions & closure eligibility
+        from services.remediation_service import (
+            get_finding_remediations,
+            link_finding_to_remediation,
+            get_remediation_verifications,
+            get_assessment_remediations,
+        )
+
+        linked_rems = get_finding_remediations(f_id)
+        all_rems = get_assessment_remediations(assessment["id"])
+
+        # Determine finding closure eligibility
+        has_open_rems = any(r["status"] not in ("Closed", "Cancelled") for r in linked_rems)
+        all_effective = True
+        for r in linked_rems:
+            if r["status"] != "Closed":
+                verifs = get_remediation_verifications(r["id"])
+                if not verifs or verifs[0]["verification_result"] != "Effective":
+                    all_effective = False
+                    break
+
+        closure_eligible = (not has_open_rems or all_effective) if linked_rems else True
+
+        with st.expander(f"Associated Corrective Actions ({len(linked_rems)}) & Closure Status", expanded=False):
+            if closure_eligible:
+                st.markdown("<span style='color: #15803D; font-weight: 700;'>✅ Finding Closure Eligible</span> — All linked corrective actions are verified or closed.", unsafe_allow_html=True)
+            else:
+                st.markdown("<span style='color: #DC2626; font-weight: 700;'>⏳ Closure Ineligible</span> — Outstanding corrective actions require effective verification before closing this finding.", unsafe_allow_html=True)
+
+            if linked_rems:
+                for lr in linked_rems:
+                    r_verifs = get_remediation_verifications(lr["id"])
+                    v_res = r_verifs[0]["verification_result"] if r_verifs else "Unverified"
+                    st.markdown(
+                        f"""
+                        <div style="font-size: 0.825rem; padding: 0.35rem 0.5rem; background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 3px; margin-bottom: 0.35rem; display: flex; justify-content: space-between; align-items: center;">
+                            <span><strong>{lr['remediation_identifier']}</strong>: {lr['action_title']} ({lr['action_priority']})</span>
+                            <span>Progress: <strong>{lr['progress_percentage']}%</strong> &bull; Status: <strong>{lr['status']}</strong> &bull; Verif: <strong>{v_res}</strong></span>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+            else:
+                st.caption("No corrective actions currently linked to this finding.")
+
+            if not is_archived:
+                unlinked_rems = [r for r in all_rems if not any(lr["id"] == r["id"] for lr in linked_rems)]
+                if unlinked_rems:
+                    st.markdown("<div style='margin-top: 0.5rem;'><strong>Link Existing Corrective Action:</strong></div>", unsafe_allow_html=True)
+                    rem_opts = {f"{r['remediation_identifier']} – {r['action_title']}": r["id"] for r in unlinked_rems}
+                    with st.form(f"link_rem_form_{f_id}"):
+                        chosen_rem_label = st.selectbox("Select Action to Link", options=list(rem_opts.keys()), key=f"sel_rem_{f_id}", label_visibility="collapsed")
+                        if st.form_submit_button("Link Selected Corrective Action"):
+                            chosen_rem_id = rem_opts[chosen_rem_label]
+                            link_finding_to_remediation(chosen_rem_id, f_id)
+                            st.success(f"Linked finding to {chosen_rem_label.split(' – ')[0]}.")
+                            st.rerun()
 
         # Display linked risks if any
         from services.risk_service import get_assessment_risks, link_finding_to_risk, unlink_finding_from_risk

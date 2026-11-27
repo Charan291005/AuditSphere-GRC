@@ -504,6 +504,9 @@ def create_fincore_demo_assessment(db_path: Optional[str] = None) -> Dict[str, A
     # Seed Phase 4 Risk records
     seed_fincore_phase4_risks(asm_id, db_path=db_path)
 
+    # Seed Phase 5 Remediation and Corrective Action records
+    seed_fincore_phase5_remediations(asm_id, db_path=db_path)
+
     # Verify metrics for demonstration dataset
     controls = get_assessment_controls(asm_id, db_path=db_path)
     metrics = calculate_overall_metrics(controls)
@@ -955,5 +958,258 @@ def seed_fincore_phase4_risks(asm_id: int, db_path: Optional[str] = None) -> Non
         assessment_date="2026-05-15",
         review_date="2026-11-30",
         linked_control_ids=[ca_map["A.6.3"]] if "A.6.3" in ca_map else [],
+        db_path=db_path,
+    )
+
+
+def seed_fincore_phase5_remediations(asm_id: int, db_path: Optional[str] = None) -> None:
+    """
+    Seed 5 realistic demonstration corrective actions for FinCore Technologies.
+    Repeat-safe / idempotent.
+    Distribution: Open: 2, In Progress: 1, Awaiting Verification: 1, Closed: 1.
+    Verified Closure Rate: 20%.
+    """
+    from services.remediation_service import (
+        create_remediation,
+        update_remediation,
+        record_progress_update,
+        record_verification,
+        close_remediation,
+        link_control_to_remediation,
+        link_finding_to_remediation,
+        link_risk_to_remediation,
+        link_evidence_to_remediation,
+    )
+
+    with db_session(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM remediation WHERE assessment_id = ?", (asm_id,))
+        if cursor.fetchone()[0] > 0:
+            return  # Repeat-safe
+
+        # Control IDs map
+        cursor.execute(
+            """
+            SELECT ca.id, c.control_identifier
+            FROM control_assessments ca
+            JOIN controls c ON ca.control_id = c.id
+            WHERE ca.assessment_id = ?
+            """,
+            (asm_id,),
+        )
+        ca_map = {r["control_identifier"]: r["id"] for r in cursor.fetchall()}
+
+        # Finding map
+        cursor.execute(
+            "SELECT id, finding_identifier FROM findings WHERE assessment_id = ?",
+            (asm_id,),
+        )
+        fnd_map = {r["finding_identifier"]: r["id"] for r in cursor.fetchall()}
+
+        # Risk map
+        cursor.execute(
+            "SELECT id, risk_identifier FROM risks WHERE assessment_id = ?",
+            (asm_id,),
+        )
+        rsk_map = {r["risk_identifier"]: r["id"] for r in cursor.fetchall()}
+
+        # Evidence map
+        cursor.execute(
+            "SELECT id, title FROM evidence WHERE assessment_id = ?",
+            (asm_id,),
+        )
+        ev_rows = cursor.fetchall()
+        ev_backup_id = next((r["id"] for r in ev_rows if "Snapshot" in r["title"] or "Backup" in r["title"] or "RDS" in r["title"]), None)
+        ev_train_id = next((r["id"] for r in ev_rows if "Awareness" in r["title"] or "Training" in r["title"]), None)
+        if not ev_train_id and ev_rows:
+            ev_train_id = ev_rows[0]["id"]
+        if not ev_backup_id and ev_rows:
+            ev_backup_id = ev_rows[0]["id"]
+
+    # Action 1: Enforce MFA for Remote Accounts (Control A.8.5, Finding FND-001, Risk RSK-001)
+    # Priority Critical, In Progress, 60%
+    act1_id = create_remediation(
+        assessment_id=asm_id,
+        data={
+            "remediation_identifier": "ACT-001",
+            "action_title": "Enforce MFA for Remote Accounts",
+            "action_description": "Decommission legacy contractor VPN gateway and mandate Azure AD Conditional Access with FIDO2 WebAuthn authentication.",
+            "immediate_correction": "Implemented temporary IP whitelisting and 15-minute inactivity session limits on legacy VPN gateway.",
+            "root_cause_analysis_method": "5 Whys",
+            "root_cause_details": {
+                "problem_statement": "Remote contractors accessed core systems without phishing-resistant MFA.",
+                "why1": "Legacy contractor gateway gw-legacy.fincore.internal remained active.",
+                "why2": "Decommissioning project was deprioritized due to billing software migration.",
+                "why3": "Contractor firm lacked compatible soft-token mobile authenticator devices.",
+                "why4": "Hardware token procurement request was stalled in procurement review.",
+                "why5": "Vendor security onboarding standard did not mandate hardware security keys before contract execution.",
+            },
+            "root_cause": "Absence of mandatory contractor onboarding security controls allowed unmanaged legacy gateway access exceptions to persist.",
+            "contributing_factors": "Third-party vendor dependency and procurement approval bottlenecks.",
+            "long_term_corrective_action": "Procure and mandate FIDO2 hardware security keys for all external contractors; completely decommission legacy gateway.",
+            "expected_outcome": "100% MFA enforcement on all remote contractor and privileged sessions.",
+            "action_priority": "Critical",
+            "action_owner": "IT Security Manager",
+            "responsible_department": "Information Security",
+            "assigned_date": "2026-05-15",
+            "target_date": "2026-06-30",
+            "progress_percentage": 60,
+            "implementation_summary": "60% of contractor accounts migrated to Azure AD Conditional Access; remaining 12 contractors scheduled for hardware key cutover.",
+            "verification_requirements": "Inspect Azure AD sign-in logs and verify DNS de-registration of gw-legacy.fincore.internal.",
+            "finding_id": fnd_map.get("FND-001"),
+            "risk_id": rsk_map.get("RSK-001"),
+            "linked_control_ids": [ca_map["A.8.5"]] if "A.8.5" in ca_map else [],
+        },
+        actor="Marcus Vance, Lead Auditor ISO 27001",
+        db_path=db_path,
+    )
+    # Set status to In Progress
+    update_remediation(act1_id, {"status": "In Progress"}, db_path=db_path)
+
+    # Action 2: Review Privileged Access Permissions (Control A.8.2)
+    # Priority High, Open, 0%
+    create_remediation(
+        assessment_id=asm_id,
+        data={
+            "remediation_identifier": "ACT-002",
+            "action_title": "Review Privileged Access Permissions",
+            "action_description": "Execute comprehensive access re-certification for all engineers with AWS IAM standing administrative privileges.",
+            "immediate_correction": "Revoked standing administrative access for 2 inactive consultant accounts.",
+            "root_cause_analysis_method": "Direct Analysis",
+            "root_cause": "Quarterly access reviews were managed manually across disconnected spreadsheets without automated revocation.",
+            "contributing_factors": "Rapid engineering headcount expansion and lack of centralized IAM governance tooling.",
+            "long_term_corrective_action": "Deploy AWS IAM Identity Center with temporary just-in-time access elevation workflows and automated managerial review campaigns.",
+            "expected_outcome": "Zero standing administrative privileges; 100% quarterly access re-certification completion.",
+            "action_priority": "High",
+            "action_owner": "IT Operations",
+            "responsible_department": "Infrastructure Operations",
+            "assigned_date": "2026-05-15",
+            "target_date": "2026-07-31",
+            "progress_percentage": 0,
+            "verification_requirements": "Inspect IAM Identity Center permission sets and quarterly review audit trail.",
+            "linked_control_ids": [ca_map["A.8.2"]] if "A.8.2" in ca_map else [],
+            "linked_risk_ids": [rsk_map.get("RSK-004")] if "RSK-004" in rsk_map else [],
+        },
+        actor="Marcus Vance, Lead Auditor ISO 27001",
+        db_path=db_path,
+    )
+
+    # Action 3: Perform Backup Restoration Testing (Control A.8.13)
+    # Priority High, Awaiting Verification, 100%
+    act3_id = create_remediation(
+        assessment_id=asm_id,
+        data={
+            "remediation_identifier": "ACT-003",
+            "action_title": "Perform Backup Restoration Testing",
+            "action_description": "Execute automated cross-account restore drill for production PostgreSQL payment database to verify RTO under 45 minutes.",
+            "immediate_correction": "Re-verified automated cross-region snapshot replication into secondary AWS DR region.",
+            "root_cause_analysis_method": "Direct Analysis",
+            "root_cause": "Cross-account KMS encryption key policy omitted the DR restore IAM execution role.",
+            "contributing_factors": "Complex multi-account AWS Landing Zone permission architecture.",
+            "long_term_corrective_action": "Update KMS key policies to authorize DR restore roles and automate recurring quarterly restoration simulations.",
+            "expected_outcome": "Production RDS PostgreSQL database restores cleanly within 30 minutes.",
+            "action_priority": "High",
+            "action_owner": "Infrastructure",
+            "responsible_department": "Cloud Architecture",
+            "assigned_date": "2026-05-15",
+            "target_date": "2026-05-30",
+            "progress_percentage": 100,
+            "implementation_summary": "KMS key policy updated; executed full database restore in staging VPC. Restoration succeeded in 22 minutes with 100% checksum consistency.",
+            "verification_requirements": "Inspect AWS Backup restoration logs and verify checksum validation report.",
+            "linked_control_ids": [ca_map["A.8.13"]] if "A.8.13" in ca_map else [],
+            "linked_risk_ids": [rsk_map.get("RSK-003")] if "RSK-003" in rsk_map else [],
+            "linked_evidence_ids": [ev_backup_id] if ev_backup_id else [],
+        },
+        actor="Marcus Vance, Lead Auditor ISO 27001",
+        db_path=db_path,
+    )
+    # Move status to Awaiting Verification
+    update_remediation(act3_id, {"status": "In Progress"}, db_path=db_path)
+    update_remediation(act3_id, {"status": "Awaiting Verification", "implementation_summary": "KMS key policy updated; executed full database restore in staging VPC. Restoration succeeded in 22 minutes with 100% checksum consistency.", "progress_percentage": 100}, db_path=db_path)
+
+    # Action 4: Update Information Security Policy (Control A.5.1)
+    # Priority Medium, Open, 0%
+    create_remediation(
+        assessment_id=asm_id,
+        data={
+            "remediation_identifier": "ACT-004",
+            "action_title": "Update Information Security Policy",
+            "action_description": "Update and distribute Information Security Policy v3.3 incorporating ISO/IEC 27001:2022 control updates and threat intelligence procedures.",
+            "immediate_correction": "Published policy addendum covering threat intelligence and cloud data masking.",
+            "root_cause_analysis_method": "Direct Analysis",
+            "root_cause": "Annual policy review schedule was out of sync with technical architecture migrations.",
+            "contributing_factors": "High operational velocity in engineering overshadowing policy revision schedules.",
+            "long_term_corrective_action": "Institute bi-annual policy governance committee reviews with automated distribution acknowledgments.",
+            "expected_outcome": "Approved, published policy distributed with 100% employee acknowledgment.",
+            "action_priority": "Medium",
+            "action_owner": "Compliance",
+            "responsible_department": "Governance, Risk & Compliance",
+            "assigned_date": "2026-05-15",
+            "target_date": "2026-08-15",
+            "progress_percentage": 0,
+            "verification_requirements": "Verify executive sign-off and intranet publication logs.",
+            "linked_control_ids": [ca_map["A.5.1"]] if "A.5.1" in ca_map else [],
+        },
+        actor="Marcus Vance, Lead Auditor ISO 27001",
+        db_path=db_path,
+    )
+
+    # Action 5: Complete Security Awareness Training (Control A.6.3)
+    # Priority Medium, Closed, 100%
+    act5_id = create_remediation(
+        assessment_id=asm_id,
+        data={
+            "remediation_identifier": "ACT-005",
+            "action_title": "Complete Security Awareness Training",
+            "action_description": "Achieve >95% workforce completion rate for annual security awareness training curriculum.",
+            "immediate_correction": "Issued automated email reminders and managerial escalation notices to 62 non-compliant personnel.",
+            "root_cause_analysis_method": "Direct Analysis",
+            "root_cause": "Training completion was not tracked as a managerial KPI.",
+            "contributing_factors": "Lack of automated escalation to department heads for overdue modules.",
+            "long_term_corrective_action": "Integrate LMS completion metrics into monthly executive leadership KPI dashboards.",
+            "expected_outcome": "Workforce security awareness training completion >= 95%.",
+            "action_priority": "Medium",
+            "action_owner": "Human Resources",
+            "responsible_department": "People Operations",
+            "assigned_date": "2026-05-01",
+            "target_date": "2026-05-10",
+            "progress_percentage": 100,
+            "implementation_summary": "Targeted completion campaign executed; 238 of 240 active personnel completed annual curriculum.",
+            "verification_requirements": "Inspect KnowBe4 LMS completion export against HR active employee roster.",
+            "linked_control_ids": [ca_map["A.6.3"]] if "A.6.3" in ca_map else [],
+            "linked_risk_ids": [rsk_map.get("RSK-005")] if "RSK-005" in rsk_map else [],
+            "linked_evidence_ids": [ev_train_id] if ev_train_id else [],
+        },
+        actor="Marcus Vance, Lead Auditor ISO 27001",
+        db_path=db_path,
+    )
+    # Transition to In Progress, Awaiting Verification, Under Verification
+    update_remediation(act5_id, {"status": "In Progress"}, db_path=db_path)
+    update_remediation(act5_id, {"status": "Awaiting Verification", "implementation_summary": "Targeted completion campaign executed; 238 of 240 active personnel completed annual curriculum.", "progress_percentage": 100}, db_path=db_path)
+
+    # Record verification for Action 5
+    record_verification(
+        remediation_id=act5_id,
+        verification_data={
+            "verification_objective": "Verify workforce security awareness training completion rate exceeds 95% target.",
+            "verification_procedure": "Extracted KnowBe4 LMS completion report and reconciled against active employee HR master roster.",
+            "expected_outcome": "Workforce completion rate >= 95% with zero overdue high-privilege staff.",
+            "observed_outcome": "238 of 240 active personnel completed training (99.2% completion rate). Zero high-privilege users overdue.",
+            "sample_examined": "100% of workforce (240 active employees across all departments)",
+            "verification_result": "Effective",
+            "verifier_name": "Marcus Vance, Lead Auditor ISO 27001",
+            "verification_date": "2026-05-15",
+            "verification_notes": "Effectiveness verified. The remediation goal has been met and verified with supporting LMS logs.",
+            "recommended_next_action": "Formally close corrective action ACT-005.",
+        },
+        actor="Marcus Vance, Lead Auditor ISO 27001",
+        db_path=db_path,
+    )
+
+    # Formally close Action 5
+    close_remediation(
+        remediation_id=act5_id,
+        closure_rationale="Verified through KnowBe4 LMS completion records that 99.2% of workforce completed annual security training. Verification VRF-001 confirmed Effective.",
+        actor="Marcus Vance, Lead Auditor ISO 27001",
         db_path=db_path,
     )

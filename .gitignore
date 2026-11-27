@@ -13,7 +13,10 @@ ENV/
 *.db
 *.sqlite
 *.sqlite3
-data/*.db
+*.db*
+*.bak*
+data/*.db*
+data/*.bak*
 data/*.sqlite
 data/*.sqlite3
 
